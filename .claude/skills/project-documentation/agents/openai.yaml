@@ -1,0 +1,4 @@
+interface:
+  display_name: "Project Documentation"
+  short_description: "Plan, reorganize, and maintain project documentation."
+  default_prompt: "Organize this project documentation into a clean, reusable structure."
