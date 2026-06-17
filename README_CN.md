@@ -45,7 +45,7 @@ pip install -e ".[full]"
 scholaraio setup
 ```
 
-这样一来，agent 能得到最完整的使用体验：仓库内置指令、本地 skills、CLI 和完整代码上下文都会直接可用。Claude Code 插件、Codex/OpenClaw skills 注册，以及其他使用路径的详细说明，详见 [`docs/getting-started/agent-setup.md`](docs/getting-started/agent-setup.md)。
+这样一来，agent 能得到最完整的使用体验：仓库内置指令、本地 skills、CLI、[`docs/DESIGN.md`](docs/DESIGN.md) 中的仓库知识地图，以及完整代码上下文都会直接可用。Claude Code 插件、Codex/OpenClaw skills 注册，以及其他使用路径的详细说明，详见 [`docs/getting-started/agent-setup.md`](docs/getting-started/agent-setup.md)。
 
 ## 升级到 1.4
 
@@ -101,6 +101,7 @@ scholaraio index --rebuild
 针对写作类任务，如果用户已经知道交付物，但还不确定该走哪条 workflow，优先从写作总入口开始。当前写作能力主要包括：
 
 - `academic-writing`：按交付物和写作阶段分流
+- `nature-workflow`：对接上游 `nature-skills` bundle，覆盖 Nature/高影响力论文配图、润色、写作、审稿人视角评估、引用、Data Availability、论文阅读、审稿回复、paper-to-PPT 和学术检索；原始上游 skill 可用时优先直连
 - `literature-review`：长文综述与 survey
 - `paper-guided-reading`：从模糊检索到单篇深读的引导式精读
 - `paper-writing`：论文具体章节写作
@@ -120,14 +121,18 @@ ScholarAIO 的设计目标是 **agent 无关**，但不同 agent 的接入方式
 | Agent / IDE                                                   | 直接打开本仓库                    | 在其他项目中复用           |
 | ------------------------------------------------------------- | --------------------------------- | -------------------------- |
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `CLAUDE.md` + `.claude/skills/`   | Claude 插件市场            |
-| [Codex](https://openai.com/codex) / OpenClaw                  | `AGENTS.md` + `.agents/skills/`   | 注册到 `~/.agents/skills/` |
-| [Cline](https://github.com/cline/cline)                       | `.clinerules` + `.claude/skills/` | CLI + skills               |
-| [Qwen](https://qwen.ai/)                                      | `.qwen/QWEN.md` + `.qwen/skills/` | CLI + skills               |
-| [Cursor](https://cursor.sh)                                   | `.cursor/rules/scholaraio.mdc` + `AGENTS.md`（`.cursorrules` 旧版 fallback） | CLI + skills               |
-| [Windsurf](https://codeium.com/windsurf)                      | `.windsurfrules`                  | CLI + skills               |
-| [GitHub Copilot](https://github.com/features/copilot)         | `.github/copilot-instructions.md` | CLI + skills               |
+| [Codex](https://openai.com/codex) / OpenClaw                  | `AGENTS.md` + `.agents/skills/`   | `scholaraio setup agent` |
+| [Cline](https://github.com/cline/cline)                       | `.clinerules` + `.claude/skills/` | `scholaraio setup agent --target-project ...` |
+| [Qwen](https://qwen.ai/)                                      | `.qwen/QWEN.md` + `.qwen/skills/` | `scholaraio setup agent --target-project ...` |
+| [Cursor](https://cursor.sh)                                   | `.cursor/rules/scholaraio.mdc` + `AGENTS.md`（`.cursorrules` 旧版 fallback） | `scholaraio setup agent --target-project ...` |
+| [Windsurf](https://codeium.com/windsurf)                      | `.windsurfrules`                  | `scholaraio setup agent --target-project ...` |
+| [GitHub Copilot](https://github.com/features/copilot)         | `.github/copilot-instructions.md` | `scholaraio setup agent --target-project ...` |
 
 Skills 遵循开放的 [AgentSkills.io](https://agentskills.io) 标准，`.agents/skills/` 与 `.qwen/skills/` 均为 `.claude/skills/` 的符号链接，方便不同 agent 发现和复用。Qwen 的项目上下文文件位于 `.qwen/QWEN.md`。
+
+如果要在其他项目中复用 ScholarAIO，先运行 `scholaraio setup agent` 预览 shell、skill discovery 和项目 wrapper 改动；确认后加 `--apply` 执行自动步骤。
+
+通过 `--target-project` 创建的 wrapper 会包含本机路径；提交到共享仓库前，请先检查 managed block。
 
 **从现有工具迁移？** 支持从 Endnote（XML/RIS）和 Zotero（Web API 或本地 SQLite）直接导入——PDF、元数据、引用关系一并迁入。如果你当前网络本身有出版社访问权限，也可以用 `scholaraio fetch-pdf` 从 DOI 或出版社页面拉取 PDF 进入正常入库流程，或为库内已有记录重拉 canonical PDF。
 
@@ -138,6 +143,7 @@ Skills 遵循开放的 [AgentSkills.io](https://agentskills.io) 标准，`.agent
 ScholarAIO 可以先用最小配置跑起来，再按需要逐步补强。
 
 - `scholaraio setup` 会带你完成基础配置。
+- `scholaraio setup agent` 会配置跨项目 agent 发现和 CLI 运行环境。
 - LLM API key 不是必须，但建议配置，用于更稳健鲁棒的元数据提取、内容补全。
 - MinerU token 不是必须，但建议配置（免费）；你也可以本地部署 MinerU 或 Docling 来完成 PDF 解析。
 - `scholaraio setup check` 可以查看当前已装好什么、缺什么、哪些只是可选项。
@@ -167,8 +173,9 @@ data/spool/inbox-proceedings/ # proceedings 专用 inbox
 
 从旧版 runtime layout 升级时，请看上面的[升级到 1.4](#升级到-14)。
 
-Agent 入口文档 → [`CLAUDE.md`](CLAUDE.md) 或 [`AGENTS.md`](AGENTS.md)
-深入 agent 参考 → [`docs/guide/agent-reference.md`](docs/guide/agent-reference.md)
+- Agent 入口文档：[`CLAUDE.md`](CLAUDE.md) 或 [`AGENTS.md`](AGENTS.md)
+- 仓库知识地图：[`docs/DESIGN.md`](docs/DESIGN.md)
+- 深入 agent 参考：[`docs/guide/agent-reference.md`](docs/guide/agent-reference.md)
 
 ## 引用
 
