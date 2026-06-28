@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research Project Structure"
+  short_description: "Scaffold and standardize a scientific compute project into the canonical archive/cases/doc/report/results/tools(/src) layout."
+  default_prompt: "Structure this workspace into the canonical research-project layout (cases, doc, report, results, tools, archive) with a README and .gitignore."

@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Research project .gitignore template.
+# Rule of thumb: ignore anything a script can regenerate; keep hand-authored input.
+# Tune the discipline-specific block to your solver/method.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# --- Solver runtime artifacts (OpenFOAM example — adapt per discipline) ---
+processor*/
+postProcessing/
+VTK/
+dynamicCode/
+constant/polyMesh
+**/constant/polyMesh/
+
+# Generated OpenFOAM/ParaView marker files
+*.OpenFOAM
+*.foam
+
+# Generated time directories. Keep the initial-condition directory 0/ tracked.
+[1-9]*/
+[1-9][0-9]*/
+[1-9]*.[0-9]*/
+0.[0-9]*/
+
+# Raw sampled-data dumps (bulky; regenerate from cases/ when needed)
+*.dat
+
+# --- Logs and local run output ---
+log
+log.*
+*.log
+*.out
+*.err
+*.pid
+
+# --- Regenerable derived artifacts (produced by tools/ and report/scripts/) ---
+results/
+report/figures/
+report/_archive/
+*.png
+*.csv
+*.txt
+
+# Generated Office deliverables (regenerate via report build scripts)
+*.docx
+*.pptx
+*.xlsx
+
+# --- Language / editor caches ---
+__pycache__/
+*.pyc
+*.bak
+*~
+.#*
+.DS_Store
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NOTE: ignoring *.png/*.csv/*.txt globally also hides hand-made assets. If you
+# keep a tracked figure or dataset, force-add it:  git add -f path/to/keep.png
+# ─────────────────────────────────────────────────────────────────────────────
