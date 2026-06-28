@@ -43,7 +43,8 @@ the **`project-documentation`** skill — invoke that skill for the `doc/` inter
 <workspace>/
 ├── README.md            # project entrypoint: what it is, case table, how to run
 ├── .gitignore           # ignore regenerable bulk + runtime artifacts
-├── archive/             # superseded cases, dead-ends, historical results
+├── archive/             # superseded cases, dead-ends, historical results (date-prefixed subfolders)
+│   └── YYYY-MM-DD_<description>/  # e.g. 2025-06-10_old-nozzle-mesh
 ├── cases/               # SOURCE OF RECORD: one folder per compute case/config
 │   ├── <case-a>/        #   solver/config inputs + (git-ignored) run outputs
 │   └── <case-b>/
@@ -145,8 +146,18 @@ Record the script-per-artifact mapping in `tools/README.md` and
 ### 6. Park history in `archive/`
 
 Move superseded cases, abandoned experiments, and old report snapshots into
-`archive/` (or `report/_archive/`). Leave a one-line note in the relevant doc or
-README saying what was archived and why. Never delete unless the user asks.
+`archive/` (or `report/_archive/`). **Name each archived subfolder with an ISO
+date prefix** so the chronology is self-evident at a glance:
+
+```
+archive/YYYY-MM-DD_<short-description>/
+# e.g.
+archive/2025-06-10_old-nozzle-mesh/
+archive/2025-08-22_pre-refactor-cases/
+```
+
+Leave a one-line note in the relevant doc or README saying what was archived and
+why. Never delete unless the user asks.
 
 ### 7. Validate
 
@@ -174,13 +185,16 @@ under a live run was moved; `git status` is not flooded with regenerable files.
 | `tools/` | data-processing & case-mgmt scripts, grouped by stage | tracked | hand-written |
 | `results/` | post-processed figures/tables from cases | ignored | `tools/analysis/*` |
 | `report/` | deliverable source, data, figures, scripts, slides | source tracked; `figures/`, Office files ignored | `report/scripts/*` |
-| `archive/` | superseded/historical material | tracked (small) or ignored (bulky) | never — frozen |
+| `archive/` | superseded/historical material; subfolders named `YYYY-MM-DD_<desc>` | git-ignored (bulky); tag before archiving if recovery needed | never — frozen |
 
 ## Style Rules
 
 - Keep `README.md` short: identity, case table, run pointer. Push detail to `doc/`.
 - One case = one folder under `cases/`; name it for its variable
   (`H0500-L2`, `Re1000`, `T300K`), not for a date.
+- Archived subfolders under `archive/` (and `report/_archive/`) **must carry an
+  ISO date prefix**: `YYYY-MM-DD_<description>`. This makes the archive
+  self-documenting and sortable without opening any file.
 - A study's outputs go under `results/<study-name>/`, never loose in the root.
 - If the project is its own Git repo nested in a parent, state the **repository
   boundary** explicitly in `README.md` and `doc/README.md` (cd into the project

@@ -12,43 +12,45 @@ dynamicCode/
 constant/polyMesh
 **/constant/polyMesh/
 
-# Generated OpenFOAM/ParaView marker files
-*.OpenFOAM
-*.foam
-
-# Generated time directories. Keep the initial-condition directory 0/ tracked.
-[1-9]*/
-[1-9][0-9]*/
-[1-9]*.[0-9]*/
-0.[0-9]*/
-
-# Raw sampled-data dumps (bulky; regenerate from cases/ when needed)
-*.dat
-
-# --- Logs and local run output ---
+# --- Solver logs and local run output ---
 log
 log.*
 *.log
 *.out
 *.err
 *.pid
+__pycache__/
+*.pyc
 
-# --- Regenerable derived artifacts (produced by tools/ and report/scripts/) ---
-results/
-report/figures/
-report/_archive/
+# --- Regenerable figures, tables, and data exports ---
 *.png
 *.csv
 *.txt
+
+# Raw sampled-data dumps (bulky; regenerate from cases/ when needed)
+*.dat
+
+# --- Regenerable derived artifacts (produced by tools/ and report/scripts/) ---
+results/
+_archive/
+archive/
 
 # Generated Office deliverables (regenerate via report build scripts)
 *.docx
 *.pptx
 *.xlsx
 
-# --- Language / editor caches ---
-__pycache__/
-*.pyc
+# --- Generated OpenFOAM/ParaView marker files ---
+*.OpenFOAM
+*.foam
+
+# --- Generated time directories. Keep the initial-condition directory 0/ tracked. ---
+[1-9]*/
+[1-9][0-9]*/
+[1-9]*.[0-9]*/
+0.[0-9]*/
+
+# --- Common temporary and editor files ---
 *.bak
 *~
 .#*
