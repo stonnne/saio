@@ -1,6 +1,6 @@
 ---
 name: export
-description: Use when the user needs BibTeX, RIS, Markdown reference lists, filtered citation exports, custom citation styles, or a Markdown-to-DOCX export for sharing.
+description: Use when the user needs BibTeX, RIS, Markdown reference lists, filtered citation exports, custom citation styles, or a Markdown-to-DOCX/PDF export for sharing.
 ---
 # 导出论文与文档
 
@@ -14,6 +14,7 @@ description: Use when the user needs BibTeX, RIS, Markdown reference lists, filt
 | RIS `.ris` | `export ris` | Zotero / Endnote / Mendeley 导入 |
 | Markdown 文献列表 | `export markdown` | 直接粘贴到文档、综述草稿 |
 | Word DOCX | `export docx` | 分享给同事、导师，任意 Markdown 内容 |
+| PDF | `pandoc + xelatex` | 便于打印 / 只读查看的最终稿，任意 Markdown 内容 |
 
 ---
 
@@ -210,6 +211,61 @@ echo "# 标题\n内容..." | scholaraio export docx --output workspace/doc.docx
 
 ---
 
+## PDF 导出（任意 Markdown → PDF，pandoc + xelatex）
+
+### 依赖检查
+
+```bash
+which pandoc xelatex
+```
+
+需要 `pandoc`（转换引擎）+ 一个 TeX 发行版提供的 `xelatex`（排版引擎，支持 Unicode 与 CJK，优于 `pdflatex`）。若缺失，按系统包管理器安装 pandoc 和 TeX Live/TinyTeX。
+
+### 基本转换
+
+```bash
+pandoc input.md -o output.pdf \
+  --pdf-engine=xelatex \
+  -V mainfont="DejaVu Serif" \
+  -V CJKmainfont="WenQuanYi Zen Hei" \
+  -V geometry:margin=1in \
+  -V colorlinks=true
+```
+
+### 目录（TOC）—— 默认不加，仅在用户确认需要时添加
+
+`--toc` 会在正文前生成目录。**默认不加**；只有当用户明确表示"要目录"/"加个 TOC"时才追加该参数：
+
+```bash
+pandoc input.md -o output.pdf \
+  --pdf-engine=xelatex \
+  -V mainfont="DejaVu Serif" \
+  -V CJKmainfont="WenQuanYi Zen Hei" \
+  -V geometry:margin=1in \
+  -V colorlinks=true \
+  --toc
+```
+
+### 字体选择
+
+| 场景 | `mainfont`（西文） | `CJKmainfont`（中日韩） |
+|------|---------------------|--------------------------|
+| 中英文混排，含希腊字母/特殊符号（μ、α、β…） | `DejaVu Serif` | `WenQuanYi Zen Hei` |
+| 纯英文、无特殊符号 | 可省略（默认 Latin Modern） | 不需要 |
+
+若 pandoc 输出中出现 `Missing character: There is no X in font [...]` 警告，说明当前 `mainfont` 缺少该字符（最常见于希腊字母 μ），改用覆盖面更广的字体（`DejaVu Serif` / `Noto Serif` 等）重新生成即可消除。可用 `fc-list | grep -i <字体名>` 确认系统已安装该字体。
+
+### Agent 执行步骤
+
+1. 确认目标 Markdown 文件路径与输出路径（默认同目录、同名 `.pdf`）。
+2. 扫描内容是否含希腊字母/特殊 Unicode 符号，若有则用 `DejaVu Serif` 作为 `mainfont`；若含中文则加 `CJKmainfont`。
+3. **目录默认关闭**——不要主动加 `--toc`；仅当用户明确要求目录时才加入。
+4. 执行 pandoc 命令生成 PDF。
+5. 检查命令输出中的 `Missing character` 等警告；如有，更换字体重新生成直至无警告。
+6. `ls -la output.pdf` 确认文件已生成，并告知用户输出路径。
+
+---
+
 ## 示例
 
 用户说："把我所有论文导出成 BibTeX"
@@ -229,6 +285,12 @@ echo "# 标题\n内容..." | scholaraio export docx --output workspace/doc.docx
 
 用户说："把这篇文献综述导出成 Word 文件"
 → 执行 `export docx --input workspace/review.md --output workspace/review.docx`
+
+用户说："把这个 md 转成 PDF，便于查看"
+→ 执行 `pandoc file.md -o file.pdf --pdf-engine=xelatex -V mainfont="DejaVu Serif" -V CJKmainfont="WenQuanYi Zen Hei" -V geometry:margin=1in -V colorlinks=true`（不加 `--toc`，除非用户另有要求）
+
+用户说："转成 PDF，加个目录"
+→ 同上命令基础上追加 `--toc`
 
 用户说："导出 DNS 相关的论文引用"
 → 先用 `usearch "DNS"` 搜索，从结果中提取目录名，再 `export markdown <dir1> <dir2> ...`
