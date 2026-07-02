@@ -127,7 +127,10 @@ class TestQueryOpenAlexRetry:
         )
         with patch(
             "scholaraio.core.config.load_config",
-            return_value=SimpleNamespace(openalex=SimpleNamespace(api_key="secret-key")),
+            return_value=SimpleNamespace(
+                openalex=SimpleNamespace(api_key="secret-key"),
+                resolved_openalex_api_key=lambda: "secret-key",
+            ),
         ):
             query_openalex(title="Test")
         called_url = mock_retry.call_args.args[0]
@@ -170,7 +173,10 @@ class TestRelaxedQueryRetry:
         )
         with patch(
             "scholaraio.core.config.load_config",
-            return_value=SimpleNamespace(openalex=SimpleNamespace(api_key="secret-key")),
+            return_value=SimpleNamespace(
+                openalex=SimpleNamespace(api_key="secret-key"),
+                resolved_openalex_api_key=lambda: "secret-key",
+            ),
         ):
             result = _query_oa_relaxed("Test paper")
         assert result["title"] == "Test paper"

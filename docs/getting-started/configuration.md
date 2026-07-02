@@ -28,12 +28,15 @@ ingest:
   mineru_api_key: "your-mineru-token"  # compatibility alias; MINERU_TOKEN is preferred
   s2_api_key: "your-semantic-scholar-key"  # optional
 
+openalex:
+  api_key: "your-openalex-key"  # optional, raises OpenAlex rate limits
+
 zotero:
   api_key: "your-zotero-key"  # optional
   library_id: "1234567"  # optional
 ```
 
-You can also keep the token out of YAML entirely and set `MINERU_TOKEN` in the environment. `MINERU_API_KEY` is still accepted as a compatibility alias.
+You can also keep the token out of YAML entirely and set `MINERU_TOKEN` in the environment. `MINERU_API_KEY` is still accepted as a compatibility alias. Likewise, `openalex.api_key` falls back to the `OPENALEX_API_KEY` environment variable, and `ingest.s2_api_key` falls back to `S2_API_KEY`.
 
 ## Key Settings
 

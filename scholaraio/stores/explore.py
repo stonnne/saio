@@ -183,7 +183,7 @@ def _oa_api_key() -> str:
     try:
         from scholaraio.core.config import load_config
 
-        return load_config().openalex.api_key or ""
+        return load_config().resolved_openalex_api_key()
     except Exception:
         return ""
 

@@ -803,6 +803,18 @@ class Config:
             return self.ingest.s2_api_key
         return os.environ.get("S2_API_KEY", "")
 
+    def resolved_openalex_api_key(self) -> str:
+        """按优先级查找 OpenAlex API key。
+
+        查找顺序: config ``openalex.api_key`` → 环境变量 ``OPENALEX_API_KEY``。
+
+        Returns:
+            API key 字符串，未找到则返回空字符串。
+        """
+        if self.openalex.api_key:
+            return self.openalex.api_key
+        return os.environ.get("OPENALEX_API_KEY", "")
+
     def resolved_embed_api_key(self) -> str:
         """按优先级查找 Embedding API key。
 
