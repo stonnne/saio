@@ -39,6 +39,7 @@ site/
 
 # Local agent worktrees
 .claude/worktrees/
+.claude/workflows/
 
 # Backups
 *.bak
