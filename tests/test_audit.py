@@ -141,6 +141,35 @@ class TestAuditDetection:
 
         assert all(not (i.paper_id == d.name and i.rule == "title_mismatch") for i in issues)
 
+    def test_title_mismatch_not_flagged_for_short_cjk_title_after_cover_image(self, tmp_papers):
+        d = tmp_papers / "陆-2022-中国脑科学计划进展"
+        d.mkdir()
+        (d / "meta.json").write_text(
+            json.dumps(
+                {
+                    "id": "cjk-9999",
+                    "title": "中国脑科学计划进展",
+                    "authors": ["陆林"],
+                    "first_author_lastname": "陆",
+                    "year": 2022,
+                    "doi": "10.1234/example-cjk",
+                    "journal": "北京大学学报(医学版)",
+                    "abstract": "Test abstract.",
+                    "paper_type": "journal-article",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (d / "paper.md").write_text(
+            "![](images/cover.jpg)\n\n## · 院士论坛 ·\n\n陆林，医学博士\n\n# 中国脑科学计划进展\n\nBody content here.",
+            encoding="utf-8",
+        )
+
+        issues = audit_papers(tmp_papers)
+
+        assert all(not (i.paper_id == d.name and i.rule == "title_mismatch") for i in issues)
+
     def test_title_mismatch_uses_raw_first_line_when_h1_is_front_matter(self, tmp_papers):
         d = tmp_papers / "RawTitle-1883-Reynolds"
         d.mkdir()

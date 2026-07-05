@@ -61,6 +61,13 @@ _TITLE_MISMATCH_SKIP_TYPES = frozenset(
 )
 _TITLE_CANDIDATE_LINE_LIMIT = 80
 _TITLE_CANDIDATE_MAX_CHARS = 240
+_TITLE_CANDIDATE_MIN_CHARS = 12
+# CJK characters carry far more information per character than Latin ones
+# (no spaces, no inflection), so a short-but-complete Chinese title like
+# "中国脑科学计划进展" (9 chars) would otherwise be rejected by the Latin-
+# calibrated minimum length and let a spurious line (e.g. an image link)
+# win by default.
+_TITLE_CANDIDATE_MIN_CJK_CHARS = 4
 
 
 @dataclass
@@ -398,7 +405,10 @@ def _iter_title_candidates(md_text: str):
             continue
         if candidate.lower().startswith("## page"):
             continue
-        if len(candidate) < 12 or len(candidate) > _TITLE_CANDIDATE_MAX_CHARS:
+        if len(candidate) > _TITLE_CANDIDATE_MAX_CHARS:
+            continue
+        cjk_chars = len(re.findall(r"[一-鿿]", candidate))
+        if len(candidate) < _TITLE_CANDIDATE_MIN_CHARS and cjk_chars < _TITLE_CANDIDATE_MIN_CJK_CHARS:
             continue
         if not re.search(r"[A-Za-z\u4e00-\u9fff]", candidate):
             continue
