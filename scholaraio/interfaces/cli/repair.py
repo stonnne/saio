@@ -207,6 +207,19 @@ def cmd_repair(args: argparse.Namespace, cfg) -> None:
         cli_lastname = meta.first_author_lastname
         cli_year = meta.year
 
+        # Snapshot identifiers/citation data already on record before the API
+        # call may replace them with a weaker (or empty) re-match.
+        pre_enrich_doi = meta.doi
+        pre_enrich_crossref_doi = meta.crossref_doi
+        pre_enrich_arxiv_id = meta.arxiv_id
+        pre_enrich_s2_id = meta.s2_paper_id
+        pre_enrich_oa_id = meta.openalex_id
+        pre_enrich_pub_number = meta.publication_number
+        pre_enrich_citation_crossref = meta.citation_count_crossref
+        pre_enrich_citation_s2 = meta.citation_count_s2
+        pre_enrich_citation_openalex = meta.citation_count_openalex
+        pre_enrich_api_sources = list(meta.api_sources)
+
         meta = enrich_metadata(meta)
 
         if cli_author and not meta.authors:
@@ -215,6 +228,29 @@ def cmd_repair(args: argparse.Namespace, cfg) -> None:
             meta.first_author_lastname = cli_lastname
         if cli_year and not meta.year:
             meta.year = cli_year
+
+        # A low-confidence re-match (relaxed/last-resort title search, or no
+        # API source matched at all) must not destroy identifiers or citation
+        # counts that were already on record - it should only fill genuinely
+        # missing fields. (Mirrors the safety net in refetch_metadata.)
+        low_confidence = not meta.api_sources or meta.extraction_method in {
+            "title_search_relaxed",
+            "title_search_s2",
+        }
+        if low_confidence:
+            meta.doi = meta.doi or pre_enrich_doi
+            meta.crossref_doi = meta.crossref_doi or pre_enrich_crossref_doi
+            meta.arxiv_id = meta.arxiv_id or pre_enrich_arxiv_id
+            meta.s2_paper_id = meta.s2_paper_id or pre_enrich_s2_id
+            meta.openalex_id = meta.openalex_id or pre_enrich_oa_id
+            meta.publication_number = meta.publication_number or pre_enrich_pub_number
+            if meta.citation_count_crossref is None:
+                meta.citation_count_crossref = pre_enrich_citation_crossref
+            if meta.citation_count_s2 is None:
+                meta.citation_count_s2 = pre_enrich_citation_s2
+            if meta.citation_count_openalex is None:
+                meta.citation_count_openalex = pre_enrich_citation_openalex
+            meta.api_sources = pre_enrich_api_sources
     else:
         meta.extraction_method = "manual_fix"
         _log_debug("skipping API query (--no-api)")

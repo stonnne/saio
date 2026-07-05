@@ -752,6 +752,72 @@ class TestRepairIdentifierResolution:
         assert repaired_meta["toc"] == data["toc"]
         assert repaired_meta["l3_conclusion"] == data["l3_conclusion"]
 
+    def test_repair_keeps_existing_identifiers_when_api_rematch_is_weak(self, tmp_papers, tmp_db, monkeypatch):
+        build_index(tmp_papers, tmp_db)
+
+        paper_dir = tmp_papers / "Smith-2023-Turbulence"
+        meta_path = paper_dir / "meta.json"
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        data.update(
+            {
+                "first_author": "John Smith",
+                "doi": "10.1234/jfm.2023.001",
+                "citation_count": {
+                    "crossref": 10,
+                    "semantic_scholar": 12,
+                    "openalex": 8,
+                },
+                "ids": {
+                    "doi": "10.1234/jfm.2023.001",
+                    "doi_url": "https://doi.org/10.1234/jfm.2023.001",
+                    "semantic_scholar": "s2-123",
+                    "semantic_scholar_url": "https://www.semanticscholar.org/paper/s2-123",
+                    "openalex": "https://openalex.org/W123",
+                    "openalex_url": "https://openalex.org/works/W123",
+                },
+                "api_sources": ["crossref", "semantic_scholar", "openalex"],
+            }
+        )
+        meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+        def fake_enrich(meta):
+            # Simulate a rate-limited DOI lookup falling back to a weak,
+            # last-resort title search that only turns up a bare match with
+            # none of the identifiers/citation data already on record.
+            meta.doi = ""
+            meta.crossref_doi = ""
+            meta.s2_paper_id = ""
+            meta.openalex_id = ""
+            meta.citation_count_crossref = None
+            meta.citation_count_s2 = None
+            meta.citation_count_openalex = None
+            meta.api_sources = ["semantic_scholar"]
+            meta.extraction_method = "title_search_s2"
+            return meta
+
+        monkeypatch.setattr("scholaraio.services.ingest_metadata.enrich_metadata", fake_enrich)
+
+        cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
+        args = Namespace(
+            paper_id="Smith-2023-Turbulence",
+            title="Recovered Turbulence Title",
+            doi="10.1234/jfm.2023.001",
+            author="John Smith",
+            year=2023,
+            no_api=False,
+            dry_run=False,
+        )
+
+        cli.cmd_repair(args, cfg)
+
+        repaired_dir = tmp_papers / "Smith-2023-Recovered-Turbulence-Title"
+        repaired_meta = json.loads((repaired_dir / "meta.json").read_text(encoding="utf-8"))
+
+        assert repaired_meta["doi"] == "10.1234/jfm.2023.001"
+        assert repaired_meta["ids"] == data["ids"]
+        assert repaired_meta["citation_count"] == data["citation_count"]
+        assert repaired_meta["api_sources"] == data["api_sources"]
+
     def test_repair_accepts_direct_dir_when_meta_json_is_missing(self, tmp_papers, tmp_path):
         paper_dir = tmp_papers / "Broken-2023-Turbulence"
         paper_dir.mkdir()
