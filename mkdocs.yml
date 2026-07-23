@@ -1,5 +1,5 @@
 site_name: ScholarAIO
-site_description: Scholar All-In-One — A research infrastructure for AI agents
+site_description: Scholar All-In-One — an academic harness for AI agents
 site_url: https://zimoliao.github.io/scholaraio/
 repo_url: https://github.com/zimoliao/scholaraio
 repo_name: zimoliao/scholaraio
@@ -34,16 +34,18 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
+      - Upgrading to 2.0: getting-started/upgrading-to-2.0.md
       - Upgrading to 1.4: getting-started/upgrading-to-1.4.md
       - Agent Setup: getting-started/agent-setup.md
       - Agent Reference: guide/agent-reference.md
       - Configuration: getting-started/configuration.md
   - User Guide:
       - CLI Reference: guide/cli-reference.md
+      - Library WebUI: guide/library-webui.md
       - Search & Browse: guide/search.md
       - Insights: guide/insights.md
       - Translation: guide/translate.md
-      - Scientific Tool Onboarding: guide/toolref-onboarding.md
+      - Scientific Tool Integration Gate: guide/toolref-onboarding.md
       - Ingestion: guide/ingestion.md
       - Writing: guide/writing.md
       - Nature Workflow Quick Start: guide/nature-workflow-quickstart.md
@@ -56,6 +58,7 @@ nav:
       - Graphviz Diagram Guide: writing-guide/graphviz-guide.md
   - Repository Knowledge:
       - Knowledge Map: DESIGN.md
+      - 2.x Public Contract: design-docs/2.x-public-contract.md
       - Design Docs: design-docs/index.md
       - Product Specs: product-specs/index.md
       - Generated References: generated/index.md

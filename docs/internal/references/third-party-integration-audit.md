@@ -2,6 +2,11 @@
 
 This document records the quality, reachability, and output validation status of the third-party integrations, APIs, CLIs, and optional toolchains supported by ScholarAIO.
 
+Dependency admission and Codex-native overlap decisions are maintained in
+`code-and-dependency-technical-debt-audit.md`. This document remains the
+workflow-evidence matrix; an integration is not promoted here merely because it
+is retained as an optional capability there.
+
 Integrations are evaluated at the workflow boundary, checking CLI/skill entrypoints, provider implementations, setup diagnostics, output formatting, fallback behaviors, and failure handling. A config test or a broad unit-test filename is not enough evidence to mark an integration surface as Good.
 
 This audit is not a declaration that the full third-party toolchain is adapted or verified. Each row claims only the evidence listed in that row; everything else remains inventory until a focused live or workflow-boundary pass verifies it.
@@ -19,7 +24,7 @@ Status is intentionally conservative:
 | Integration / Surface | Category | Status | Verification Path / Test Evidence | Observed Result / Config & Version Boundaries |
 | :--- | :--- | :--- | :--- | :--- |
 | **qt-web-extractor (HTTP & MCP)** | Web / Agent | **partially-reviewed** | `extract_web`, `_clean_table_code_fences`, `tests/test_webtools_source.py`, fixture pair under `tests/fixtures/` | Sanitizer regression is covered for malformed table-cell code fences and adjacent standalone code blocks. Live daemon canary evidence is still required before this surface is promoted to `good`. Boundaries: `webextract.transport` (HTTP/MCP), `webextract.base_url`, `webextract.mcp_url`, `webextract.api_key`. |
-| **GUILessBingSearch** | Web / Agent | **not-yet-reviewed** | N/A | Excluded from current triage phase. |
+| **GUILessBingSearch compatibility adapter** | Web / Agent | **not a default surface** | `tests/test_webtools_source.py` | Retained only for existing Python/config callers. ScholarAIO no longer registers a search skill, CLI command, setup check, generated config block, or default MCP server; agents use host-native web search. |
 | **MinerU Local API** | Parsing | **not-yet-reviewed** | N/A | Excluded from current triage phase. |
 | **MinerU Cloud CLI** | Parsing | **not-yet-reviewed** | N/A | Excluded from current triage phase. |
 | **Paper2Any MCP Sidecar** | Parsing/MCP | **not-yet-reviewed** | N/A | Excluded from current triage phase. |

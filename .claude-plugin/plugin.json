@@ -1,7 +1,7 @@
 {
   "name": "scholaraio",
-  "description": "A research infrastructure for AI agents. Search, read, and analyze papers from your local knowledge base while coding. Includes arXiv discovery, layered reading, ingestion, topic modeling, citation graphs, insights analytics, Office document inspection, scientific tool docs, and academic writing workflows. Requires Python 3.10+ and pip install.",
-  "version": "1.3.0",
+  "description": "Scholar All-in-One: an academic harness for AI agents. Carry evidence, persistent research context, repeatable workflows, reviewable outputs, and verification across agent sessions. Requires Python 3.10+ and pip install.",
+  "version": "2.0.0",
   "author": {
     "name": "ZimoLiao",
     "email": "zimoliao@mail.ustc.edu.cn"
@@ -23,6 +23,8 @@
     "office-documents",
     "scholarly-writing",
     "knowledge-base",
+    "agent-skills",
+    "academic-workflow",
     "semantic-search",
     "topic-modeling",
     "bibtex",

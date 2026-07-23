@@ -4,21 +4,26 @@ from __future__ import annotations
 
 import importlib
 import os
+import sys
 
 from scholaraio.core.config import Config
 from scholaraio.services.setup import (
+    _DEP_GROUPS,
+    DepGroupStatus,
     ParserChoice,
     _check_docling,
     _check_graphviz_dot,
     _check_huggingface,
     _check_inkscape,
     _check_mineru,
+    _dependency_install_spec,
     _prompt_text,
     _wizard_config,
     _wizard_deps,
     _wizard_keys,
     _wizard_parser,
     check_dep_group,
+    format_check_results,
     recommend_pdf_parser,
     run_check,
     run_wizard,
@@ -51,7 +56,7 @@ def test_check_dep_group_suppresses_import_side_effect_output(monkeypatch, capsy
     original = importlib.import_module
 
     def fake_import(name: str, package=None):
-        if name == "mermaid":
+        if name == "bertopic":
             print("noisy stdout during import")
             raise RuntimeError("optional backend warning")
         if package is None:
@@ -60,7 +65,7 @@ def test_check_dep_group_suppresses_import_side_effect_output(monkeypatch, capsy
 
     monkeypatch.setattr(importlib, "import_module", fake_import)
 
-    status = check_dep_group("draw")
+    status = check_dep_group("topics")
 
     captured = capsys.readouterr()
     assert not status.installed
@@ -177,7 +182,29 @@ def test_run_check_includes_parser_recommendation(monkeypatch):
     assert "PDF 解析器推荐" in labels
 
 
-def test_run_check_includes_pdf_office_and_draw_dependency_groups(monkeypatch):
+def test_setup_check_english_output_is_cp1252_safe(tmp_path, monkeypatch):
+    cfg = Config()
+    cfg._root = tmp_path
+    monkeypatch.setattr(
+        "scholaraio.services.setup.check_dep_group",
+        lambda group: DepGroupStatus(group, installed=False, missing=["optional-package"]),
+    )
+    monkeypatch.setattr("scholaraio.services.setup.shutil.which", lambda _command: None)
+    monkeypatch.setattr("scholaraio.services.setup.check_mineru_server", lambda _endpoint: False)
+    monkeypatch.setattr("scholaraio.services.setup._probe_url", lambda _url, timeout=2: False)
+    monkeypatch.setattr("scholaraio.services.setup.check_webextract_service", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr("scholaraio.services.setup.list_paper2any_tools", lambda **_kwargs: [])
+    monkeypatch.setattr(cfg, "resolved_api_key", lambda: "")
+    monkeypatch.setattr(cfg, "resolved_mineru_api_key", lambda: "")
+    monkeypatch.setattr(cfg, "resolved_s2_api_key", lambda: "")
+    monkeypatch.setattr(cfg, "resolved_zotero_api_key", lambda: "")
+
+    output = format_check_results(run_check(cfg, "en"))
+
+    output.encode("cp1252")
+
+
+def test_run_check_includes_runtime_dependency_groups_without_removed_draw_extra(monkeypatch):
     cfg = Config()
     monkeypatch.setattr("scholaraio.services.setup._check_mineru", lambda *_: (True, "mineru ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_docling", lambda *_: (True, "docling ok"))
@@ -191,7 +218,7 @@ def test_run_check_includes_pdf_office_and_draw_dependency_groups(monkeypatch):
     labels = [item.label for item in results]
     assert "PDF 依赖" in labels
     assert "Office 依赖" in labels
-    assert "绘图依赖" in labels
+    assert "绘图依赖" not in labels
     assert "Graphviz dot" in labels
     assert "Inkscape" in labels
 
@@ -219,69 +246,55 @@ def test_run_check_includes_optional_api_configuration_statuses(monkeypatch):
     assert "OpenDCAI/Paper2Any" in result_map["Paper2Any"].detail
 
 
-def test_run_check_includes_optional_webtools_guidance(monkeypatch):
+def test_run_check_includes_optional_webextract_guidance(monkeypatch):
     cfg = Config()
     monkeypatch.setattr("scholaraio.services.setup._check_mineru", lambda *_: (True, "mineru ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_docling", lambda *_: (True, "docling ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_huggingface", lambda *_: (True, "hf ok"))
     monkeypatch.setattr("scholaraio.services.setup.recommend_pdf_parser", lambda *args: ("MinerU", "both reachable"))
-    monkeypatch.setattr("scholaraio.services.setup.check_websearch_service", lambda *_args, **_kwargs: False)
     monkeypatch.setattr("scholaraio.services.setup.check_webextract_service", lambda *_args, **_kwargs: False)
 
     results = run_check(cfg, "zh")
 
     result_map = {item.label: item for item in results}
-    assert "Web search" in result_map
+    assert "Web search" not in result_map
     assert "Web extract" in result_map
-    assert result_map["Web search"].ok is True
     assert result_map["Web extract"].ok is True
-    assert "GUILessBingSearch" in result_map["Web search"].detail
     assert "qt-web-extractor" in result_map["Web extract"].detail
-    assert "127.0.0.1:8765" in result_map["Web search"].detail
     assert "127.0.0.1:8766" in result_map["Web extract"].detail
-    assert "未运行" in result_map["Web search"].detail
     assert "未运行" in result_map["Web extract"].detail
 
 
-def test_run_check_marks_optional_webtools_reachable(monkeypatch):
+def test_run_check_marks_optional_webextract_reachable(monkeypatch):
     cfg = Config()
-    cfg.websearch.transport = "mcp"
-    cfg.websearch.mcp_url = "http://remote.example:8765/mcp"
     cfg.webextract.transport = "mcp"
     cfg.webextract.mcp_url = "http://remote.example:8766/mcp"
     monkeypatch.setattr("scholaraio.services.setup._check_mineru", lambda *_: (True, "mineru ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_docling", lambda *_: (True, "docling ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_huggingface", lambda *_: (True, "hf ok"))
     monkeypatch.setattr("scholaraio.services.setup.recommend_pdf_parser", lambda *args: ("MinerU", "both reachable"))
-    monkeypatch.setattr("scholaraio.services.setup.check_websearch_service", lambda *_args, **_kwargs: True)
     monkeypatch.setattr("scholaraio.services.setup.check_webextract_service", lambda *_args, **_kwargs: True)
 
     results = run_check(cfg, "zh")
 
     result_map = {item.label: item for item in results}
-    assert "可访问" in result_map["Web search"].detail
     assert "可访问" in result_map["Web extract"].detail
-    assert "http://remote.example:8765/mcp" in result_map["Web search"].detail
     assert "http://remote.example:8766/mcp" in result_map["Web extract"].detail
 
 
-def test_run_check_reports_optional_webtool_env_mcp_tools(monkeypatch):
+def test_run_check_reports_optional_webextract_env_mcp_tool(monkeypatch):
     cfg = Config()
-    cfg.websearch.transport = "mcp"
     cfg.webextract.transport = "mcp"
-    monkeypatch.setenv("WEBSEARCH_MCP_TOOL", "custom_search")
     monkeypatch.setenv("WEBEXTRACT_MCP_TOOL", "custom_fetch")
     monkeypatch.setattr("scholaraio.services.setup._check_mineru", lambda *_: (True, "mineru ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_docling", lambda *_: (True, "docling ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_huggingface", lambda *_: (True, "hf ok"))
     monkeypatch.setattr("scholaraio.services.setup.recommend_pdf_parser", lambda *args: ("MinerU", "both reachable"))
-    monkeypatch.setattr("scholaraio.services.setup.check_websearch_service", lambda *_args, **_kwargs: False)
     monkeypatch.setattr("scholaraio.services.setup.check_webextract_service", lambda *_args, **_kwargs: False)
 
     results = run_check(cfg, "en")
 
     result_map = {item.label: item for item in results}
-    assert "MCP tool custom_search" in result_map["Web search"].detail
     assert "MCP tool custom_fetch" in result_map["Web extract"].detail
 
 
@@ -292,7 +305,6 @@ def test_run_check_reports_paper2any_sidecar_reachability(monkeypatch):
     monkeypatch.setattr("scholaraio.services.setup._check_docling", lambda *_: (True, "docling ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_huggingface", lambda *_: (True, "hf ok"))
     monkeypatch.setattr("scholaraio.services.setup.recommend_pdf_parser", lambda *args: ("MinerU", "both reachable"))
-    monkeypatch.setattr("scholaraio.services.setup.check_websearch_service", lambda *_args, **_kwargs: False)
     monkeypatch.setattr("scholaraio.services.setup.check_webextract_service", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         "scholaraio.services.setup.list_paper2any_tools", lambda *_args, **_kwargs: [{"name": "paper2any_status"}]
@@ -314,7 +326,6 @@ def test_run_check_reports_paper2any_env_mcp_url_precedence(monkeypatch):
     monkeypatch.setattr("scholaraio.services.setup._check_docling", lambda *_: (True, "docling ok"))
     monkeypatch.setattr("scholaraio.services.setup._check_huggingface", lambda *_: (True, "hf ok"))
     monkeypatch.setattr("scholaraio.services.setup.recommend_pdf_parser", lambda *args: ("MinerU", "both reachable"))
-    monkeypatch.setattr("scholaraio.services.setup.check_websearch_service", lambda *_args, **_kwargs: False)
     monkeypatch.setattr("scholaraio.services.setup.check_webextract_service", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(
         "scholaraio.services.setup.list_paper2any_tools", lambda *_args, **_kwargs: [{"name": "paper2any_status"}]
@@ -327,12 +338,11 @@ def test_run_check_reports_paper2any_env_mcp_url_precedence(monkeypatch):
     assert "http://config.example:8770/mcp" not in detail
 
 
-def test_wizard_config_template_includes_optional_external_tools(tmp_path):
+def test_wizard_config_template_includes_optional_external_tools_without_websearch(tmp_path):
     _wizard_config(tmp_path, "zh")
 
     text = (tmp_path / "config.yaml").read_text(encoding="utf-8")
-    assert "websearch:" in text
-    assert "mcp_url: http://127.0.0.1:8765/mcp" in text
+    assert "websearch:" not in text
     assert "webextract:" in text
     assert "mcp_url: http://127.0.0.1:8766/mcp" in text
     assert "paper2any:" in text
@@ -389,22 +399,49 @@ def test_run_check_uses_accessor_dirs_for_directory_status(tmp_path, monkeypatch
     assert result_map["目录结构"].ok is True
 
 
-def test_check_dep_group_supports_draw_extra(monkeypatch):
-    original = importlib.import_module
+def test_setup_does_not_advertise_an_empty_draw_dependency_group():
+    assert "draw" not in _DEP_GROUPS
 
-    def fake_import(name: str, package=None):
-        if name == "cli_anything":
-            raise RuntimeError("bad optional import")
-        if package is None:
-            return original(name)
-        return original(name, package)
 
-    monkeypatch.setattr(importlib, "import_module", fake_import)
+def test_core_dependency_probe_does_not_require_optional_mineru_cloud_cli():
+    assert ("mineru_open_api", "mineru-open-api") not in _DEP_GROUPS["core"]
+    assert {pip_name for _, pip_name in _DEP_GROUPS["core"]} == {
+        "requests",
+        "pyyaml",
+        "defusedxml",
+        "beautifulsoup4",
+    }
 
-    status = check_dep_group("draw")
 
-    assert not status.installed
-    assert "cli-anything-inkscape" in status.missing
+def test_dependency_install_spec_does_not_invent_core_extra():
+    assert _dependency_install_spec("core") == "scholaraio"
+    assert _dependency_install_spec("office") == "scholaraio[office]"
+
+
+def test_wizard_deps_uses_published_core_install_target(monkeypatch, capsys):
+    monkeypatch.setattr("builtins.input", lambda *_args, **_kwargs: "y")
+    monkeypatch.setattr(
+        "scholaraio.services.setup.check_dep_group",
+        lambda group: type(
+            "Status",
+            (),
+            {"installed": group != "core", "missing": ["requests"]},
+        )(),
+    )
+    calls = []
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return type("Result", (), {"returncode": 1, "stderr": ""})()
+
+    monkeypatch.setattr("scholaraio.services.setup.subprocess.run", fake_run)
+
+    _wizard_deps("en")
+
+    out = capsys.readouterr().out
+    assert calls == [[sys.executable, "-m", "pip", "install", "scholaraio"]]
+    assert "pip install scholaraio" in out
+    assert "scholaraio[core]" not in out
 
 
 def test_check_dep_group_treats_oserror_import_failure_as_missing(monkeypatch):
@@ -452,7 +489,7 @@ def test_check_mineru_reports_actionable_failure(monkeypatch):
     ok, detail = _check_mineru(cfg, "zh")
 
     assert ok is False
-    assert "mineru-open-api" in detail
+    assert "scholaraio[mineru-cloud]" in detail
     assert "token" in detail
     assert "Docker" in detail
 

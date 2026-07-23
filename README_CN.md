@@ -5,34 +5,42 @@
 
 # ScholarAIO
 
-**Scholar All-In-One — A research infrastructure for AI agents.**
+**Scholar All-In-One — an academic harness for AI agents.**
 
 [English](README.md) | [中文](README_CN.md)
 
 [![GitHub stars](https://img.shields.io/github/stars/ZimoLiao/scholaraio?style=social)](https://github.com/ZimoLiao/scholaraio/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-ScholarAIO-purple.svg)](.claude/skills/)
+[![Agent Skills](https://img.shields.io/badge/Agent_Skills-ScholarAIO-purple.svg)](.agents/skills/)
 
 </div>
 
 ---
 
-你的 coding agent 已经能读代码、写代码、跑实验。ScholarAIO 为它补上一套结构化的科研工作台，让它不仅能写代码，也能检索文献、对照论文校验结果、更准确地使用科学软件，并在一个终端里把整个科研流程串起来。
+你的 coding agent 已经能够推理、规划、浏览、写代码和使用工具。ScholarAIO 为它补上一套学术 harness，让同一个 agent 能在完整研究过程中持续携带证据、项目状态、可复用工作流和可审阅产物。
 
 - 你的论文库会变成同一个 agent 可持续复用的知识底座。
-- 遇到科学软件问题时，agent 可以在运行时查阅官方文档，而不是只靠 prompt 猜参数。
-- 系统一开始就按“可以继续扩展更多工具和工作流”的方向来设计。
+- Skills 与 CLI 契约为检索、阅读、组织、引用、写作和验证提供稳定执行路径。
+- 外部工具只在确实增强核心工作流时选择性接入，并在不可用时清晰降级。
+
+这里的 **All-in-One 指一条连贯完整的学术工作流**，不是把所有科学软件都装进同一个发行包。当前 agent 负责推理与编排；ScholarAIO 负责它周围可持久复用的学术上下文和操作契约。
 
 <div align="center">
   <img src="docs/assets/scholaraio.gif" width="900" alt="ScholarAIO 自然语言科研工作流">
 </div>
 
-ScholarAIO 给 AI coding agent 的不只是检索能力，而是一整套真正可用的科研工作台：自然语言交互、论文与研究笔记支撑、更准确地使用科学软件、代码编写与执行、基于文献的结果校验，以及结构化的论文写作。
+ScholarAIO 给 AI coding agent 的不只是检索能力，而是一套稳定的学术底座：证据、项目记忆、工具使用、研究产物与验证都可以持续复用，同时不试图取代 agent 本身。
 
-<div align="center">
-  <img src="docs/assets/scholaraio-architecture-v1.3.0.png" width="900" alt="ScholarAIO 架构图：human、agent、scientific context、tool layer 与 compute/outputs">
-</div>
+```mermaid
+flowchart LR
+    R[研究者] <--> A[Coding agent]
+    A <--> H[ScholarAIO 学术 harness]
+    H --> E[证据与上下文]
+    H --> W[Skills、CLI 与工作区]
+    H --> O[产物与验证]
+    H -. 可选 .-> X[边界明确的外部适配器]
+```
 
 ## 快速开始
 
@@ -41,37 +49,21 @@ ScholarAIO 给 AI coding agent 的不只是检索能力，而是一整套真正�
 ```bash
 git clone https://github.com/ZimoLiao/scholaraio.git
 cd scholaraio
-pip install -e ".[full]"
+pip install -e .
 scholaraio setup
 ```
 
 这样一来，agent 能得到最完整的使用体验：仓库内置指令、本地 skills、CLI、[`docs/DESIGN.md`](docs/DESIGN.md) 中的仓库知识地图，以及完整代码上下文都会直接可用。Claude Code 插件、Codex/OpenClaw skills 注册，以及其他使用路径的详细说明，详见 [`docs/getting-started/agent-setup.md`](docs/getting-started/agent-setup.md)。
 
-## 升级到 1.4
+## 升级到 2.0
 
-ScholarAIO 1.4 是一次 runtime layout 升级。它不会在 `git pull`、
-`pip install -U` 或普通 CLI 启动时自动迁移用户数据。这是有意设计：
-迁移数据必须是一次显式的离线操作，并且会留下 migration journal 和验证记录。
+ScholarAIO 2.0 是一次产品边界与兼容契约发布；对于已经使用 1.4 或 1.5
+数据布局的用户，它不会再次改变 runtime layout。更新包后运行
+`scholaraio setup check`，并按需重建索引即可。从 1.3 或更早版本升级的用户
+仍需完成显式 runtime migration。
 
-推荐路径：
-
-```bash
-# 1. 更新代码/包
-git pull
-pip install -e ".[full]"
-
-# 2. 在包含 data/、workspace/、config*.yaml 的 ScholarAIO runtime 根目录显式检查并迁移
-scholaraio migrate status
-scholaraio migrate upgrade --migration-id upgrade-1.4.0 --confirm
-scholaraio migrate verify --migration-id upgrade-1.4.0
-
-# 3. 数据进入 fresh layout 后重建索引
-scholaraio index --rebuild
-```
-
-最低风险的做法是先保留或复制旧 ScholarAIO 文件夹，再在升级后的 checkout
-中迁移那份包含 `data/`、`workspace/` 和 `config*.yaml` 的 runtime。
-详细步骤见 [`docs/getting-started/upgrading-to-1.4.md`](docs/getting-started/upgrading-to-1.4.md)。
+删除或收窄的接口、迁移方式和 2.x 兼容承诺见
+[`docs/getting-started/upgrading-to-2.0.md`](docs/getting-started/upgrading-to-2.0.md)。
 
 ## 核心功能
 
@@ -84,7 +76,7 @@ scholaraio index --rebuild
 | **文献探索**                  | 多维度发现                     | 按期刊、主题、作者、机构、关键词、年份、引用影响力等多个维度探索一个研究方向                |
 | **引用图谱**                  | 参考文献与影响力               | 正向引用、反向引用、共同引用分析                                                            |
 | **分层阅读**                  | 按需加载                       | 先看元数据或摘要，再按需要深入到结论和全文，不必一开始就读完整篇                            |
-| **本地文献库 WebUI**          | 浏览与质检                     | 用只读本地界面查看记录、审计状态、Markdown 摘要/结论、proceedings 子论文和 PDF，不通过远程脚本暴露文献库数据 |
+| **本地文献库 WebUI**          | 检索、引用与阅读               | 在本地只读界面中按字段筛选、运行关键词/语义/融合检索、一键复制 canonical BibTeX、查看审计与 Markdown 摘要，并以内嵌或系统默认阅读器打开 PDF；全程不通过远程脚本暴露文献库数据 |
 | **出版社 PDF 拉取**           | 使用你当前的访问权限           | 通过用户自己的合法网络环境从 DOI 或出版社页面拉取 PDF，支持校园网直连模式，以及单篇/批量重拉库内 canonical PDF |
 | **多源导入**                  | 现有文献库可直接接入           | 从现有文献管理工具、拉取到的 PDF、本地 PDF 和 Markdown 直接导入，不用从零重建你的文献库      |
 | **工作区**                    | 按项目整理                     | 论文子集管理，支持限定范围内的检索和 BibTeX 导出                                            |
@@ -94,8 +86,8 @@ scholaraio index --rebuild
 | **研究洞察**                  | 阅读行为分析                   | 搜索热词、高频阅读论文、阅读趋势、语义近邻推荐——帮助你发现可能忽略的文献                    |
 | **联邦发现**                  | 跨库搜索                       | 把主库、探索库和 arXiv 放在同一个搜索入口里，不必在多个工具之间来回切换                     |
 | **远程备份**                  | 基于 rsync 的同步              | 通过命名备份目标把 ScholarAIO 的 `data/` 工作区增量同步到远程机器                           |
-| **AI for Science 运行时能力** | 更准确地使用科学软件           | 在运行时直接对照官方文档使用科学软件，而不是靠猜命令、猜参数                                |
-| **可扩展工具接入**            | 持续接入真正需要的软件         | 随着新的科学工具和工作流变得重要，系统可以继续扩展支持                                      |
+| **有据可查的科学工具使用**    | 查询精确接口                   | 在运行时对照有版本的官方文档，而不是靠猜科学软件的命令和参数                                |
+| **边界明确的工具适配**        | 只接入确有必要的工具           | 外部工具保持可选、隔离、可测试，并受 2.x integration gate 约束                              |
 | **学术写作**                  | AI 辅助撰写                    | 以路由为中心的写作工作流：文献综述、论文章节、引用验证、审稿回复、研究空白、海报内容包、技术调研报告——每条引用都可追溯到你自己的文献库      |
 
 针对写作类任务，如果用户已经知道交付物，但还不确定该走哪条 workflow，优先从写作总入口开始。当前写作能力主要包括：
@@ -140,7 +132,7 @@ Skills 遵循开放的 [AgentSkills.io](https://agentskills.io) 标准，`.agent
 
 > 请优先用agent打开scholaraio，让它给你介绍配置方案，引导你上手scholaraio，下面仅作基本说明
 
-ScholarAIO 可以先用最小配置跑起来，再按需要逐步补强。
+ScholarAIO 默认以最小配置运行，只在具体工作流需要时安装可选能力。
 
 - `scholaraio setup` 会带你完成基础配置。
 - `scholaraio setup agent` 会配置跨项目 agent 发现和 CLI 运行环境。
@@ -171,7 +163,7 @@ data/spool/inbox/       # 常规入库 inbox
 data/spool/inbox-proceedings/ # proceedings 专用 inbox
 ```
 
-从旧版 runtime layout 升级时，请看上面的[升级到 1.4](#升级到-14)。
+从旧版本升级时，请看上面的[升级到 2.0](#升级到-20)。
 
 - Agent 入口文档：[`CLAUDE.md`](CLAUDE.md) 或 [`AGENTS.md`](AGENTS.md)
 - 仓库知识地图：[`docs/DESIGN.md`](docs/DESIGN.md)
@@ -184,7 +176,7 @@ data/spool/inbox-proceedings/ # proceedings 专用 inbox
 ```bibtex
 @software{scholaraio,
   author = {Liao, Zi-Mo},
-  title = {ScholarAIO: AI-Native Research Terminal},
+  title = {ScholarAIO: An Academic Harness for AI Agents},
   year = {2026},
   url = {https://github.com/ZimoLiao/scholaraio},
   license = {MIT}

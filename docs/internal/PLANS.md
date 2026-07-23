@@ -2,15 +2,16 @@
 
 Status: Current map
 
-Last Updated: 2026-06-12
+Last Updated: 2026-07-21
 
 Plans are repository knowledge, not chat history. Store them here so agents can
 resume work without relying on external context.
 
 ## Active Plans
 
-- `docs/internal/exec-plans/active/2026-06-05-001-feat-agent-setup-automation-plan.md`
-  tracks the agent setup automation feature.
+There are no active execution plans. Product-scope decisions are grounded in
+the repository-root `STRATEGY.md`; release work should create a focused active
+plan only when implementation spans multiple resumable stages.
 
 ## Completed Plans
 
@@ -18,6 +19,8 @@ resume work without relying on external context.
   entry point for the 1.4 runtime-layout cleanup record.
 - `docs/internal/exec-plans/completed/breaking-compat-cleanup-plan.md` records the
   breaking cleanup generation for legacy import and runtime layout behavior.
+- `docs/internal/exec-plans/completed/2026-06-05-001-feat-agent-setup-automation-plan.md`
+  records the completed cross-project agent setup automation feature.
 
 ## Planning Rules
 

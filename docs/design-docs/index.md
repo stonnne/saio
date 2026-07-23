@@ -2,7 +2,7 @@
 
 Status: Current index
 
-Last Updated: 2026-06-12
+Last Updated: 2026-07-21
 
 Design docs are long-lived architecture and runtime decisions. They answer what
 must stay true, not just what one implementation plan happened to do.
@@ -11,10 +11,12 @@ must stay true, not just what one implementation plan happened to do.
 
 | Document | Scope |
 |----------|-------|
+| `2.x-public-contract.md` | Stable 2.x surfaces, change policy, product boundary, and third-party integration gate |
 | `directory-structure-spec.md` | Current runtime directory layout and path ownership |
 | `migration-mechanism-spec.md` | Migration control-plane contract, journal, locking, and cleanup gates |
 | `directory-migration-sequence.md` | Historical compatibility-window execution order |
 | `user-data-migration-strategy.md` | Historical user-data migration strategy and posture |
+| `wsl-pdf-edit-mirror.md` | Stable Windows PDF edit mirrors, automatic reconciliation, and recovery contract |
 
 ## Rules
 

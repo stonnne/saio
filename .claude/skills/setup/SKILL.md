@@ -99,6 +99,7 @@ Claude Code 是例外：`setup agent` 只会打印插件 slash-command；插件�
     - 是否检测到现有 MinerU token
     - Hugging Face 是否可达
 - **MinerU token**：仅在用户选择 `MinerU` 云端方案时提示。要明确说明：`MinerU token 是免费的，只需要注册并申请`；优先使用 `MINERU_TOKEN`，`MINERU_API_KEY` 只保留兼容
+- **MinerU cloud extra**：`mineru-open-api` 不属于 core 或 `full`。只有用户选择 MinerU 云端方案时，才安装 `scholaraio[mineru-cloud]`（源码 checkout 使用 `pip install -e ".[mineru-cloud]"`）
 - **Contact email**：免费；用于 Crossref polite pool，加快 API 响应，可选但推荐
 - 将密钥写入 `config.local.yaml`（不进 git）
 

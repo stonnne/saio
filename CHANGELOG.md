@@ -7,15 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0-beta.1] — 2026-07-21
+
+### Product Direction
+
+- **Functional convergence**: Defined ScholarAIO as an All-in-One academic harness for agents. All-in-One now means one coherent workflow for evidence, persistent context, tools, outputs, and verification; it does not mean bundling every scientific package or expanding into a general autoresearch or multi-agent platform.
+- **2.x public contract**: Documented the stable CLI, configuration, runtime-layout, skill-discovery, persistent-data, and published Python API surfaces, together with a deprecation policy for the 2.x line.
+- **Bounded integration gate**: New third-party integrations must demonstrate a core academic need, avoid duplicating agent-native or existing capabilities, isolate optional dependencies, pass a fixed-corpus or end-to-end smoke, and fail with an actionable fallback.
+
 ### Added
 
+- **Durable product strategy**: Added the repository-root `STRATEGY.md` as the product-scope anchor for future planning and implementation work.
+- **2.0 upgrade guide**: Added a no-migration path for 1.4/1.5 users, the explicit migration path for older runtimes, and replacements for removed or narrowed surfaces.
+- **EndNote-style Library WebUI workflows** ([#114](https://github.com/ZimoLiao/scholaraio/issues/114)): Added canonical one-click BibTeX copy, separate inline and operating-system PDF actions, composable title/author/year/journal/type/DOI filters, and explicit Metadata/Keyword/Semantic/Unified search modes with stable ranked results and actionable index/vector diagnostics. Native PDF launch is stable-ID-only and anti-CSRF protected, bridges WSL PDFs into the Windows default application, automatically becomes a client download for remote deployments, and falls back to downloading if a native launch fails.
+- **Persistent WSL PDF editing** ([#121](https://github.com/ZimoLiao/scholaraio/pull/121)): Added stable Windows-side edit mirrors with validated automatic reconciliation back to canonical WSL library PDFs and bounded recovery copies.
 - **Repository knowledge map** ([#112](https://github.com/ZimoLiao/scholaraio/pull/112)): Added a published `docs/DESIGN.md` knowledge map and focused documentation indexes for agent navigation, while keeping maintenance plans, validation records, and audit notes out of the published MkDocs surface.
 - **Automated cross-project agent setup** ([#111](https://github.com/ZimoLiao/scholaraio/pull/111)): Added `scholaraio setup agent` preview, apply, and check workflows for shell runtime wiring, Codex/OpenClaw skill discovery, Claude Code plugin instructions, and project-local wrappers for Qwen, Cursor, Cline, Windsurf, and GitHub Copilot.
 - **Nature workflow bridge skill** ([#107](https://github.com/ZimoLiao/scholaraio/issues/107)): Added a ScholarAIO `nature-workflow` bridge skill that routes Nature Portfolio writing and figure workflows to the upstream `nature-skills` repository when installed, keeps ScholarAIO-native fallbacks explicit, documents the install and quick-start path, and includes deterministic plus product-demo fixtures that generate reviewable manuscript, figure, slide, and QA artifacts.
 
+### Changed
+
+- **Optional MinerU cloud dependency**: Moved `mineru-open-api` out of the mandatory base install into the dedicated `mineru-cloud` extra. The cloud parser remains supported, but users who only search existing libraries or use local PDF parsers no longer receive a provider-specific executable package. A clean-wheel CI smoke now verifies that the base package installs and starts without that external CLI.
+- **Host-native skill routing** ([#127](https://github.com/ZimoLiao/scholaraio/pull/127)): Shared skills now request capabilities instead of hard-coding one agent host, prefer the active agent's native browsing and artifact abilities when appropriate, and keep local CLI fallbacks explicit. Oversized document instructions were split into focused references and the skill harness now enforces progressive disclosure.
+- **Scientific-tool onboarding**: Existing `toolref` workflows remain supported, but onboarding now starts with the 2.x integration gate and explicitly prefers external recipes or sidecars when a proposal does not belong in the core academic harness.
+- **Paper2Any installation contract** ([#127](https://github.com/ZimoLiao/scholaraio/pull/127)): Setup and documentation now follow the current upstream base and paper requirement files, fail closed when the checkout shape is unsupported, and keep Paper2Any an optional sidecar.
+
 ### Fixed
 
+- **Semantic-filter independence** ([#116](https://github.com/ZimoLiao/scholaraio/pull/116)): Decoupled semantic-search metadata filtering from the FTS index so vector workflows do not require unrelated keyword-index state.
+- **Cross-platform PDF delivery** ([#118](https://github.com/ZimoLiao/scholaraio/pull/118), [#119](https://github.com/ZimoLiao/scholaraio/pull/119)): Made local, WSL, headless, systemd, and remote WebUI PDF actions reflect what the host can actually do, including reliable Windows launcher discovery and client-download fallback.
+- **Windows Unicode stdio fallback** ([#126](https://github.com/ZimoLiao/scholaraio/pull/126); original report and patch [#124](https://github.com/ZimoLiao/scholaraio/pull/124)): Prevented localized CLI output from crashing on legacy Windows console, file, or pipe encodings by relaxing only the affected stream error handlers, while preserving non-Windows behavior and explicit `PYTHONIOENCODING` settings.
+- **Windows setup-check console compatibility** ([#113](https://github.com/ZimoLiao/scholaraio/pull/113)): Replaced non-cp1252 status symbols in the default English `setup check` output so Windows consoles no longer raise `UnicodeEncodeError` during final verification.
 - **Webextract Markdown table-cell cleanup** ([#110](https://github.com/ZimoLiao/scholaraio/pull/110)): Sanitized malformed block-level code fences emitted inside `qt-web-extractor` table cells before HTTP/MCP extraction results reach `webextract` and ingest consumers, while preserving standalone fenced code blocks and pipe characters inside code-cell content.
+
+### Removed
+
+- **Default external web-search surface**: Removed the implicitly matched `websearch` skill, CLI command, default MCP registration, setup check, configuration template, and cross-skill routes. Live discovery now uses the host agent's native web search; `webextract` remains narrowly scoped to rendered content and `ingest-link` persistence.
+- **Empty `draw` package extra** ([#127](https://github.com/ZimoLiao/scholaraio/pull/127)): Removed the dependency-free `scholaraio[draw]` extra and unowned package recommendations. Diagram source generation remains available, while Graphviz and Inkscape stay explicit system tools.
 
 ## [1.5.0] — 2026-05-24
 
@@ -117,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Docs consistency**: README, README_CN, AGENTS, and CLAUDE now describe the current parser stack and setup behavior consistently
 - **arXiv ingest edge cases**: `scholaraio.sources.arxiv` no longer makes `bs4` a transitive hard dependency for normal metadata flows, and old-style arXiv IDs like `hep-th/9901001` now create parent directories correctly during PDF download
 - **Scientific runtime docs compatibility**: toolref runtime behavior, scientific skills, and published setup/docs metadata now match the refactored `toolref` facade and current public CLI/package surface
-- **Optional dependency guidance**: missing-dependency messages and `setup check` now consistently point users to `scholaraio[import]`, `scholaraio[pdf]`, `scholaraio[office]`, and `scholaraio[draw]` instead of raw leaf packages
+- **Optional dependency guidance**: missing-dependency messages and `setup check` point Python dependencies to `scholaraio[import]`, `scholaraio[pdf]`, and `scholaraio[office]`; Graphviz and Inkscape remain explicit system-tool checks instead of a dependency-free `draw` extra
 - **Translate / enrich CLI feedback and recovery**: `translate` now reports chunk-level progress, persists per-chunk state in `.translate_{lang}/`, resumes unfinished work safely, and avoids writing fake success output when every chunk fails; `enrich-toc` now reports start/success/failure with extracted TOC counts for single-paper runs
 - **Workspace removal and refetch status accuracy**: `ws remove` now falls back to exact workspace `dir_name` matching when registry lookup misses, and `refetch` no longer reports spurious updates when API enrichment returns no authoritative data
 

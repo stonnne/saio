@@ -26,7 +26,7 @@ import yaml
 from scholaraio.core.config import Config, load_config
 from scholaraio.providers.mineru import check_server as check_mineru_server
 from scholaraio.providers.paper2any import Paper2AnyError, list_paper2any_tools, resolve_paper2any_mcp_url
-from scholaraio.providers.webtools import check_webextract_service, check_websearch_service
+from scholaraio.providers.webtools import check_webextract_service
 
 # ============================================================================
 #  Bilingual strings
@@ -43,7 +43,6 @@ _S: dict[str, dict[Lang, str]] = {
     "import_deps": {"en": "Import deps", "zh": "导入依赖"},
     "pdf_deps": {"en": "PDF deps", "zh": "PDF 依赖"},
     "office_deps": {"en": "Office deps", "zh": "Office 依赖"},
-    "draw_deps": {"en": "Draw deps", "zh": "绘图依赖"},
     "config_yaml": {"en": "config.yaml", "zh": "config.yaml"},
     "llm_key": {"en": "LLM API key", "zh": "LLM API key"},
     "mineru": {"en": "MinerU", "zh": "MinerU"},
@@ -55,7 +54,6 @@ _S: dict[str, dict[Lang, str]] = {
     "contact_email": {"en": "Contact email", "zh": "联系邮箱"},
     "s2_key": {"en": "Semantic Scholar API key", "zh": "Semantic Scholar API key"},
     "zotero_key": {"en": "Zotero API key", "zh": "Zotero API key"},
-    "websearch": {"en": "Web search", "zh": "Web search"},
     "webextract": {"en": "Web extract", "zh": "Web extract"},
     "paper2any": {"en": "Paper2Any", "zh": "Paper2Any"},
     "directories": {"en": "Directories", "zh": "目录结构"},
@@ -106,16 +104,16 @@ _S: dict[str, dict[Lang, str]] = {
     },
     "step_verify": {"en": "Step 5: Verification", "zh": "步骤 5: 验证"},
     "install_prompt": {
-        "en": "  {group} deps missing: {pkgs}\n  Install? (pip install scholaraio[{group}])",
-        "zh": "  {group} 依赖缺失: {pkgs}\n  是否安装？(pip install scholaraio[{group}])",
+        "en": "  {group} deps missing: {pkgs}\n  Install? (pip install {install_spec})",
+        "zh": "  {group} 依赖缺失: {pkgs}\n  是否安装？(pip install {install_spec})",
     },
     "yn": {"en": " [Y/n] ", "zh": " [Y/n] "},
     "skip": {"en": "  Skipped.", "zh": "  已跳过。"},
     "installing": {"en": "  Installing {group}...", "zh": "  正在安装 {group}..."},
     "install_ok": {"en": "  Installed successfully.", "zh": "  安装成功。"},
     "install_fail": {
-        "en": "  Installation failed. You can install later with: pip install scholaraio[{group}]",
-        "zh": "  安装失败。你可以稍后手动安装: pip install scholaraio[{group}]",
+        "en": "  Installation failed. You can install later with: pip install {install_spec}",
+        "zh": "  安装失败。你可以稍后手动安装: pip install {install_spec}",
     },
     "config_exists": {"en": "  config.yaml already exists, skipping.", "zh": "  config.yaml 已存在，跳过。"},
     "config_created": {
@@ -155,8 +153,8 @@ _S: dict[str, dict[Lang, str]] = {
         "zh": "  检测到现有 MinerU token；在网络探测前先视为 MinerU 云路径可用。",
     },
     "parser_choice_auto_token_without_cli": {
-        "en": "  Existing MinerU token detected, but `mineru-open-api` is still missing; install it first (usually `pip install -e .` or `pip install mineru-open-api`), then continue with MinerU.",
-        "zh": "  检测到现有 MinerU token，但当前还缺少 `mineru-open-api`；请先安装它（通常直接 `pip install -e .` 或 `pip install mineru-open-api`），再继续走 MinerU。",
+        "en": "  Existing MinerU token detected, but `mineru-open-api` is still missing; run `pip install 'scholaraio[mineru-cloud]'` first, then continue with MinerU.",
+        "zh": "  检测到现有 MinerU token，但当前还缺少 `mineru-open-api`；请先运行 `pip install 'scholaraio[mineru-cloud]'`，再继续走 MinerU。",
     },
     "parser_choice_auto_cli_without_token": {
         "en": "  MinerU CLI is available, but no MinerU API token is configured yet; register the free token later if you want cloud mode.",
@@ -342,7 +340,12 @@ def _prompt_text(prompt: str) -> str:
 
 # (import_name, pip_name)
 _DEP_GROUPS: dict[str, list[tuple[str, str]]] = {
-    "core": [("requests", "requests"), ("yaml", "pyyaml"), ("mineru_open_api", "mineru-open-api")],
+    "core": [
+        ("requests", "requests"),
+        ("yaml", "pyyaml"),
+        ("defusedxml", "defusedxml"),
+        ("bs4", "beautifulsoup4"),
+    ],
     "embed": [("sentence_transformers", "sentence-transformers"), ("faiss", "faiss-cpu"), ("numpy", "numpy")],
     "topics": [("bertopic", "bertopic"), ("pandas", "pandas")],
     "import": [("endnote_utils", "endnote-utils"), ("pyzotero", "pyzotero")],
@@ -353,7 +356,6 @@ _DEP_GROUPS: dict[str, list[tuple[str, str]]] = {
         ("pptx", "python-pptx"),
         ("openpyxl", "openpyxl"),
     ],
-    "draw": [("mermaid", "mermaid-py"), ("cli_anything", "cli-anything-inkscape")],
 }
 
 _SPEC_ONLY_IMPORTS = {"sentence_transformers", "faiss", "numpy"}
@@ -368,11 +370,16 @@ class DepGroupStatus:
     missing: list[str] = field(default_factory=list)
 
 
+def _dependency_install_spec(group: str) -> str:
+    """Return the published install target for a dependency group."""
+    return "scholaraio" if group == "core" else f"scholaraio[{group}]"
+
+
 def check_dep_group(group: str) -> DepGroupStatus:
     """Check if all packages in a dependency group are importable.
 
     Args:
-        group: Dependency group name (core/embed/topics/import/pdf/office/draw).
+        group: Dependency group name (core/embed/topics/import/pdf/office).
 
     Returns:
         DepGroupStatus with installed flag and list of missing pip package names.
@@ -440,7 +447,7 @@ def run_check(cfg: Config | None = None, lang: Lang = "zh") -> list[CheckResult]
         CheckResult(
             label=t("python_ver", lang),
             ok=vi >= (3, 10),
-            detail=ver_str + (" ✓" if vi >= (3, 10) else " (need ≥3.10)"),
+            detail=ver_str if vi >= (3, 10) else ver_str + " (need >=3.10)",
         )
     )
 
@@ -452,19 +459,18 @@ def run_check(cfg: Config | None = None, lang: Lang = "zh") -> list[CheckResult]
         ("import", "import_deps"),
         ("pdf", "pdf_deps"),
         ("office", "office_deps"),
-        ("draw", "draw_deps"),
     ]:
         status = check_dep_group(group)
         if status.installed:
             pkgs = ", ".join(p for _, p in _DEP_GROUPS[group])
             results.append(CheckResult(t(label_key, lang), True, pkgs))
         else:
-            hint = f"pip install scholaraio[{group}]"
+            hint = f"pip install {_dependency_install_spec(group)}"
             results.append(
                 CheckResult(
                     t(label_key, lang),
                     False,
-                    f"{t('not_installed', lang)}: {', '.join(status.missing)}  → {hint}",
+                    f"{t('not_installed', lang)}: {', '.join(status.missing)}  | {hint}",
                 )
             )
 
@@ -546,24 +552,6 @@ def run_check(cfg: Config | None = None, lang: Lang = "zh") -> list[CheckResult]
                 t("optional_zotero_unset", lang),
             )
         )
-
-    websearch_detail = _optional_webtool_detail(
-        cfg,
-        section_name="websearch",
-        service_name="GUILessBingSearch",
-        default_base_url="http://127.0.0.1:8765",
-        default_mcp_tool="search_bing",
-        env_transport="WEBSEARCH_TRANSPORT",
-        env_base_url="WEBSEARCH_URL",
-        env_mcp_urls=("WEBSEARCH_MCP_URL", "GUILESS_BING_SEARCH_MCP_URL"),
-        env_mcp_tool="WEBSEARCH_MCP_TOOL",
-        env_api_keys=("WEBSEARCH_API_KEY", "GUILESS_BING_SEARCH_API_KEY"),
-        command="scholaraio websearch",
-        start_hint="python third_party/GUILessBingSearch/guiless_bing_search.py",
-        checker=check_websearch_service,
-        lang=lang,
-    )
-    results.append(CheckResult(t("websearch", lang), True, websearch_detail))
 
     webextract_detail = _optional_webtool_detail(
         cfg,
@@ -767,12 +755,12 @@ def _detect_mineru(cfg: Config, lang: Lang) -> MinerUStatus:
         if lang == "zh":
             detail = (
                 "已配置 MinerU token，但未安装 mineru-open-api"
-                f" → pip install mineru-open-api | 本地部署: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
+                f" | pip install 'scholaraio[mineru-cloud]' | 本地部署: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
             )
         else:
             detail = (
                 "MinerU token configured, but mineru-open-api is not installed"
-                f" → pip install mineru-open-api | local docs: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
+                f" | pip install 'scholaraio[mineru-cloud]' | local docs: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
             )
         return MinerUStatus(
             ok=False,
@@ -786,12 +774,12 @@ def _detect_mineru(cfg: Config, lang: Lang) -> MinerUStatus:
     if lang == "zh":
         detail = (
             "未配置 MinerU token / CLI，且本地 MinerU 服务不可达"
-            f" → 安装 CLI: pip install mineru-open-api | token: {MINERU_TOKEN_URL} | 本地部署: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
+            f" | 安装 CLI: pip install 'scholaraio[mineru-cloud]' | token: {MINERU_TOKEN_URL} | 本地部署: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
         )
     else:
         detail = (
             "MinerU token / CLI not configured and local MinerU service is unreachable"
-            f" → install CLI: pip install mineru-open-api | token: {MINERU_TOKEN_URL} | local docs: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
+            f" | install CLI: pip install 'scholaraio[mineru-cloud]' | token: {MINERU_TOKEN_URL} | local docs: {MINERU_DOCS_URL} | Docker: {MINERU_DOCKER_URL}"
         )
     return MinerUStatus(
         ok=False,
@@ -809,8 +797,8 @@ def _check_docling(lang: Lang) -> tuple[bool, str]:
     if cmd:
         return True, cmd
     if lang == "zh":
-        return False, f"未安装 → pip install docling | 安装文档: {DOCLING_INSTALL_URL} | CLI: {DOCLING_CLI_URL}"
-    return False, f"not installed → pip install docling | install docs: {DOCLING_INSTALL_URL} | CLI: {DOCLING_CLI_URL}"
+        return False, f"未安装 | pip install docling | 安装文档: {DOCLING_INSTALL_URL} | CLI: {DOCLING_CLI_URL}"
+    return False, f"not installed | pip install docling | install docs: {DOCLING_INSTALL_URL} | CLI: {DOCLING_CLI_URL}"
 
 
 def _check_graphviz_dot(lang: Lang) -> tuple[bool, str]:
@@ -821,12 +809,12 @@ def _check_graphviz_dot(lang: Lang) -> tuple[bool, str]:
     if lang == "zh":
         return (
             False,
-            "未安装 → sudo apt-get install graphviz | macOS: brew install graphviz | "
+            "未安装 | sudo apt-get install graphviz | macOS: brew install graphviz | "
             "conda: conda install -c conda-forge graphviz | 验证: dot -V",
         )
     return (
         False,
-        "not installed → sudo apt-get install graphviz | macOS: brew install graphviz | "
+        "not installed | sudo apt-get install graphviz | macOS: brew install graphviz | "
         "conda: conda install -c conda-forge graphviz | verify: dot -V",
     )
 
@@ -839,12 +827,12 @@ def _check_inkscape(lang: Lang) -> tuple[bool, str]:
     if lang == "zh":
         return (
             False,
-            "未安装 → sudo apt-get install inkscape | macOS: brew install --cask inkscape | "
+            "未安装 | sudo apt-get install inkscape | macOS: brew install --cask inkscape | "
             "Beamer \\includesvg 需要 Inkscape 与 -shell-escape",
         )
     return (
         False,
-        "not installed → sudo apt-get install inkscape | macOS: brew install --cask inkscape | "
+        "not installed | sudo apt-get install inkscape | macOS: brew install --cask inkscape | "
         "Beamer \\includesvg requires Inkscape and -shell-escape",
     )
 
@@ -866,8 +854,8 @@ def _check_huggingface(lang: Lang) -> tuple[bool, str]:
     if ok:
         return True, t("reachability_yes", lang)
     if lang == "zh":
-        return False, "不可达 → Docling 或 Hugging Face 模型下载可能失败；可优先考虑 MinerU / ModelScope"
-    return False, "unreachable → Docling or Hugging Face model downloads may fail; prefer MinerU / ModelScope"
+        return False, "不可达 | Docling 或 Hugging Face 模型下载可能失败；可优先考虑 MinerU / ModelScope"
+    return False, "unreachable | Docling or Hugging Face model downloads may fail; prefer MinerU / ModelScope"
 
 
 def _wizard_mineru_available(cfg: Config) -> tuple[bool, bool]:
@@ -977,14 +965,19 @@ def run_wizard(cfg: Config | None = None) -> None:
 
 def _wizard_deps(lang: Lang) -> None:
     """Check and optionally install missing dependency groups."""
-    for group in ("core", "embed", "topics", "import", "pdf", "office", "draw"):
+    for group in ("core", "embed", "topics", "import", "pdf", "office"):
         status = check_dep_group(group)
         label_key = f"{group}_deps"
         if status.installed:
             pkgs = ", ".join(p for _, p in _DEP_GROUPS[group])
             print(f"  [OK] {t(label_key, lang)}: {pkgs}")
         else:
-            msg = t("install_prompt", lang).format(group=group, pkgs=", ".join(status.missing))
+            install_spec = _dependency_install_spec(group)
+            msg = t("install_prompt", lang).format(
+                group=group,
+                pkgs=", ".join(status.missing),
+                install_spec=install_spec,
+            )
             print(msg)
             answer = _prompt_result(t("yn", lang))
             ans = answer.text.lower()
@@ -994,14 +987,14 @@ def _wizard_deps(lang: Lang) -> None:
             if ans in ("", "y", "yes"):
                 print(t("installing", lang).format(group=group))
                 ret = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", f"scholaraio[{group}]"],
+                    [sys.executable, "-m", "pip", "install", install_spec],
                     capture_output=True,
                     text=True,
                 )
                 if ret.returncode == 0:
                     print(t("install_ok", lang))
                 else:
-                    print(t("install_fail", lang).format(group=group))
+                    print(t("install_fail", lang).format(install_spec=install_spec))
                     if ret.stderr:
                         # show last 3 lines of error
                         err_lines = ret.stderr.strip().splitlines()[-3:]
@@ -1252,13 +1245,7 @@ ingest:
   mineru_enable_table: true           # only effective for pipeline / vlm
   abstract_llm_mode: verify # off | fallback | verify
 
-# Optional external web tools. Prefer MCP endpoints for agent workflows.
-websearch:
-  transport: mcp
-  mcp_url: http://127.0.0.1:8765/mcp
-  api_key: null        # optional bearer token -> config.local.yaml or env WEBSEARCH_API_KEY
-  mcp_tool: search_bing
-
+# Optional rendered web extraction for URL ingestion.
 webextract:
   transport: mcp
   mcp_url: http://127.0.0.1:8766/mcp

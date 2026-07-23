@@ -8,7 +8,7 @@
 
 ## ScholarAIO 是什么
 
-ScholarAIO 是一个 AI-native research terminal。用户通过 coding agent 用自然语言完成文献检索、阅读、分析、写作、图表生成，以及科学计算辅助工作流。
+ScholarAIO 是一个面向 agent 的 All-in-One 学术 harness。研究者通过 coding agent 检索文献、检查证据、组织持久化项目上下文、生成可审阅研究产物，并使用边界明确的科学工具适配器；ScholarAIO 不取代当前 agent 的原生推理与编排能力。
 
 核心 Python 包是 `scholaraio`。真正做事时，应优先走 ScholarAIO CLI 和项目 skills，而不是绕过运行时 helper 直接手改数据目录。
 
@@ -28,11 +28,12 @@ ScholarAIO 是一个 AI-native research terminal。用户通过 coding agent 用
 建议按这个顺序看：
 
 1. [`README.md`](README.md)：产品定位和顶层结构
-2. [`docs/DESIGN.md`](docs/DESIGN.md)：仓库知识地图
-3. [`docs/getting-started/agent-setup.md`](docs/getting-started/agent-setup.md)：直接开仓库 vs 插件 / 跨项目接入
-4. [`docs/guide/cli-reference.md`](docs/guide/cli-reference.md)：当前 CLI 面
-5. [`docs/guide/agent-reference.md`](docs/guide/agent-reference.md)：更深的 agent、runtime、skill 组织说明
-6. [`docs/internal/PLANS.md`](docs/internal/PLANS.md) 和 [`docs/internal/exec-plans/completed/scholaraio-upgrade-plan.md`](docs/internal/exec-plans/completed/scholaraio-upgrade-plan.md)：涉及运行时布局、迁移、兼容层时先看
+2. [`STRATEGY.md`](STRATEGY.md)：修改产品范围或新增外部集成前先看
+3. [`docs/DESIGN.md`](docs/DESIGN.md)：仓库知识地图
+4. [`docs/getting-started/agent-setup.md`](docs/getting-started/agent-setup.md)：直接开仓库 vs 插件 / 跨项目接入
+5. [`docs/guide/cli-reference.md`](docs/guide/cli-reference.md)：当前 CLI 面
+6. [`docs/guide/agent-reference.md`](docs/guide/agent-reference.md)：更深的 agent、runtime、skill 组织说明
+7. [`docs/internal/PLANS.md`](docs/internal/PLANS.md) 和 [`docs/internal/exec-plans/completed/scholaraio-upgrade-plan.md`](docs/internal/exec-plans/completed/scholaraio-upgrade-plan.md)：涉及运行时布局、迁移、兼容层时先看
 
 ## Skill 优先工作流
 
@@ -44,9 +45,9 @@ canonical skill 源是 `.claude/skills/`。其他 agent 发现入口都只是它
 
 代表性 skills：
 
-- 核心科研：`search`、`show`、`ingest`、`workspace`、`audit`、`translate`
+- 核心科研：`search`、`show`、`ingest`、`ingest-link`、`workspace`、`audit`、`translate`
 - 写作：`academic-writing`、`nature-workflow`、`literature-review`、`paper-guided-reading`、`paper-writing`、`citation-check`、`writing-polish`、`review-response`、`research-gap`、`poster`、`technical-report`
-- 输出与工具：`draw`、`document`、`websearch`、`webextract`、`scientific-runtime`、`scientific-tool-onboarding`
+- 输出与工具：`draw`、`document`、`scientific-runtime`、`scientific-tool-onboarding`
 
 如果一个流程已经长成可复用 playbook，就把它做成 skill，而不是继续膨胀这个文件。
 
@@ -115,7 +116,7 @@ breaking cleanup generation 已移除 `scholaraio.index`、`scholaraio.workspace
 
 这些 wrapper 都应保持轻量，不要把每个 wrapper 都做成第二份大手册。
 
-可选 webtools MCP server 已列在 `.mcp.json`，供支持 project MCP JSON 的宿主使用。Codex 使用自己的 MCP registry；注册 `web-search` / `web-extractor` 的命令见 `docs/guide/webtools-integration.md`。
+可选 webtools MCP server 已列在 `.mcp.json`，供支持 project MCP JSON 的宿主使用。Codex 使用自己的 MCP registry；可选渲染提取器的注册命令见 `docs/guide/webtools-integration.md`。
 
 ## 深入参考
 

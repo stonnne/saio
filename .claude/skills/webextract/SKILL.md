@@ -1,9 +1,11 @@
 ---
 name: webextract
-description: Use when the user provides a URL that needs readable content, JavaScript rendering, PDF extraction, ingestion-ready Markdown, or qt-web-extractor MCP fetch_url support.
+description: Use when a URL or online PDF needs ingestion-ready rendered content, or when host-native URL reading failed because JavaScript/PDF rendering is required; only use it for those cases, not routine web discovery or reading.
 ---
 
 # WebExtract - 网页内容提取
+
+**当前 Agent 原生能力优先，但必须先做能力检查**：按页面读取能力和输出契约路由，不按 Agent 品牌路由。若当前会话实际提供网页搜索和页面读取能力，就由当前使用的 Agent 原生能力完成普通检索、来源核验和阅读。只有该能力无法读取需要 JavaScript/PDF 渲染的页面，或任务明确需要可入库、可复现的渲染后 Markdown 时，才调用本 skill。
 
 通过 qt-web-extractor 提取网页内容并转换为 Markdown。优先使用 MCP 方式连接
 本机或远端 extractor；HTTP `/extract` 方式保留为兼容 fallback。
@@ -78,9 +80,10 @@ scholaraio webextract <URL> --max-chars 1200
 
 当 agent 需要提取网页内容进行分析时：
 
-1. 优先确认 `webextract.transport: mcp` 或远端 MCP endpoint 已配置
-2. 使用 `scholaraio webextract <URL>` 提取网页内容
-3. 将提取的 Markdown 内容进行分析、总结或回答问题
+1. 普通网页发现、来源核验和阅读优先使用当前 Agent 原生网页能力
+2. 只有原生读取失败，或需要生成可入库的渲染后 Markdown 时，才确认 `webextract.transport: mcp` 或远端 MCP endpoint 已配置
+3. 使用 `scholaraio webextract <URL>` 提取网页内容
+4. 将提取的 Markdown 交给 `ingest-link` 工作流或用于需要完整渲染正文的分析
 
 ## 注意事项
 

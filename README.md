@@ -5,34 +5,42 @@
 
 # ScholarAIO
 
-**Scholar All-In-One — A research infrastructure for AI agents.**
+**Scholar All-In-One — an academic harness for AI agents.**
 
 [English](README.md) | [中文](README_CN.md)
 
 [![GitHub stars](https://img.shields.io/github/stars/ZimoLiao/scholaraio?style=social)](https://github.com/ZimoLiao/scholaraio/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Claude Code Skills](https://img.shields.io/badge/Claude_Code_Skills-ScholarAIO-purple.svg)](.claude/skills/)
+[![Agent Skills](https://img.shields.io/badge/Agent_Skills-ScholarAIO-purple.svg)](.agents/skills/)
 
 </div>
 
 ---
 
-Your coding agent already reads code, writes code, and runs experiments. ScholarAIO adds a structured research workspace on top, so the same agent can search literature, cross-check results against papers, use scientific software more accurately, and carry the whole research workflow from one terminal.
+Your coding agent already reasons, plans, browses, writes code, and uses tools. ScholarAIO adds the academic harness around it, so the same agent can carry evidence, project state, repeatable workflows, and reviewable outputs across the whole research process.
 
 - Your paper library becomes a reusable knowledge base for the same agent.
-- When scientific software questions come up, the agent can consult official documentation at runtime instead of guessing from prompts.
-- The system is built to keep expanding as new tools and workflows become worth supporting.
+- Skills and CLI contracts give the agent stable ways to search, read, organize, cite, write, and verify.
+- Optional tools are integrated selectively when they strengthen that workflow and degrade cleanly when unavailable.
+
+Here, **All-in-One means one coherent academic workflow**, not every scientific package in one distribution. The active agent supplies reasoning and orchestration; ScholarAIO supplies the durable academic context and operational contracts around it.
 
 <div align="center">
   <img src="docs/assets/scholaraio.gif" width="900" alt="ScholarAIO natural-language research workflow">
 </div>
 
-ScholarAIO offers more than search. It gives an AI coding agent a research workspace that supports natural-language interaction, papers and notes, more reliable use of scientific software, writing and running code, checking results against the literature, and structured academic writing.
+ScholarAIO offers more than search. It gives an AI coding agent a stable academic substrate for evidence, project memory, tool use, research outputs, and verification without trying to replace the agent itself.
 
-<div align="center">
-  <img src="docs/assets/scholaraio-architecture-v1.3.0.png" width="900" alt="ScholarAIO architecture: human, agent, scientific context, tool layer, and compute/outputs">
-</div>
+```mermaid
+flowchart LR
+    R[Researcher] <--> A[Coding agent]
+    A <--> H[ScholarAIO academic harness]
+    H --> E[Evidence and context]
+    H --> W[Skills, CLI, and workspaces]
+    H --> O[Outputs and verification]
+    H -. optional .-> X[Bounded external adapters]
+```
 
 ## Quick Start
 
@@ -41,39 +49,21 @@ The default and recommended way to use ScholarAIO is simple: install it, configu
 ```bash
 git clone https://github.com/ZimoLiao/scholaraio.git
 cd scholaraio
-pip install -e ".[full]"
+pip install -e .
 scholaraio setup
 ```
 
 Then open the repository in Codex, Claude Code, or another supported agent. In this setup, the agent gets the fullest experience: bundled instructions, local skills, the CLI, the repository knowledge map in [`docs/DESIGN.md`](docs/DESIGN.md), and the complete codebase context are all available directly. For Claude Code plugins, Codex/OpenClaw skill registration, and other setup paths, see [`docs/getting-started/agent-setup.md`](docs/getting-started/agent-setup.md).
 
-## Upgrading To 1.4
+## Upgrading To 2.0
 
-ScholarAIO 1.4 is a runtime-layout upgrade. It does **not** migrate user data
-automatically during `git pull`, `pip install -U`, or normal CLI startup. That is
-intentional: data movement is an explicit offline operation with a migration
-journal and verification.
+ScholarAIO 2.0 is a product-boundary and compatibility release; it does not
+change the current data layout for 1.4 or 1.5 users. Upgrade the package, run
+`scholaraio setup check`, and rebuild indexes when appropriate. Users coming
+from 1.3 or earlier must still complete the explicit runtime migration.
 
-Recommended path:
-
-```bash
-# 1. Update the code/package
-git pull
-pip install -e ".[full]"
-
-# 2. From the ScholarAIO runtime root, inspect and migrate explicitly
-scholaraio migrate status
-scholaraio migrate upgrade --migration-id upgrade-1.4.0 --confirm
-scholaraio migrate verify --migration-id upgrade-1.4.0
-
-# 3. Rebuild indexes after migrated data lands in the fresh layout
-scholaraio index --rebuild
-```
-
-For the lowest-risk upgrade, keep or copy your old ScholarAIO folder first, then
-run the migration in the upgraded checkout that contains your `data/`,
-`workspace/`, and `config*.yaml`. See
-[`docs/getting-started/upgrading-to-1.4.md`](docs/getting-started/upgrading-to-1.4.md).
+See [`docs/getting-started/upgrading-to-2.0.md`](docs/getting-started/upgrading-to-2.0.md)
+for removed surfaces, migration guidance, and the 2.x compatibility promise.
 
 ## What It Does
 
@@ -86,7 +76,7 @@ run the migration in the upgraded checkout that contains your `data/`,
 | **Literature Exploration** | Multi-dimensional discovery | Explore a research direction through journal, topic, author, institution, keyword, year, citation impact, and more |
 | **Citation Graph** | References & impact | Forward citations, backward citations, and shared-reference analysis |
 | **Layered Reading** | Read on demand | Start with metadata or the abstract, then move into conclusions or full text only when you need to |
-| **Local Library WebUI** | Browse and inspect | Open a read-only local UI for records, audit status, Markdown abstracts/conclusions, proceedings children, and PDFs without exposing library data to remote scripts |
+| **Local Library WebUI** | Search, cite, and read | Filter records by field, run keyword/semantic/unified retrieval, copy canonical BibTeX, inspect audit status and Markdown summaries, and open PDFs inline or in the OS default viewer; WSL launches a stable Windows edit mirror and automatically persists embedded annotations back to the canonical library PDF |
 | **Publisher PDF Fetch** | Use your current access | Fetch DOI or publisher-page PDFs through the user's legal network context, with direct campus-network mode and selected/all-library PDF refetch |
 | **Multi-Source Import** | Connect your existing library | Import directly from reference managers, fetched PDFs, local PDFs, and Markdown without rebuilding your library from scratch |
 | **Workspaces** | Organize by project | Manage paper subsets with scoped search and BibTeX export |
@@ -96,8 +86,8 @@ run the migration in the upgraded checkout that contains your `data/`,
 | **Research Insights** | Reading behavior analytics | Search hot keywords, most-read papers, reading trends, and semantic neighbor recommendations for papers you haven't read yet |
 | **Federated Discovery** | Cross-library search | Search your main library, exploration libraries, and arXiv from one entry point instead of hopping across tools |
 | **Remote Backup** | Rsync-based sync | Back up the ScholarAIO `data/` workspace to configured remote targets through named rsync plans |
-| **AI-for-Science Runtime** | Use scientific software more accurately | Use scientific software against official documentation at runtime instead of guessing commands and parameters |
-| **Extensible Tool Onboarding** | Keep adding the tools that matter | As new scientific tools and workflows become important, the system can keep expanding |
+| **Grounded Scientific Tool Use** | Consult exact interfaces | Use versioned official documentation at runtime instead of guessing scientific-software commands and parameters |
+| **Bounded Tool Adapters** | Integrate only when justified | Keep external tools optional, isolated, testable, and subject to the 2.x integration gate |
 | **Academic Writing** | AI-assisted writing | Router-first workflows for literature review, guided single-paper reading, paper sections, citation check, rebuttal, gap analysis, poster packages, and technical reports — with every citation traceable to your own library |
 
 For writing tasks, start with the router-style writing entry when the deliverable is clear but the workflow is not. The current writing stack is organized around:
@@ -141,7 +131,7 @@ Wrappers created with `--target-project` include local machine paths; review the
 
 > Start by opening `scholaraio` with your agent and let it walk you through the setup. The notes below are only a basic overview.
 
-ScholarAIO works with a minimal setup and can be expanded as needed.
+ScholarAIO starts with a minimal setup. Install optional capabilities only when a workflow needs them.
 
 - `scholaraio setup` walks you through the basics.
 - `scholaraio setup agent` configures cross-project agent discovery and CLI runtime wiring.
@@ -172,7 +162,7 @@ data/spool/inbox/       # Drop PDFs here for ingestion
 data/spool/inbox-proceedings/ # Dedicated proceedings ingest inbox
 ```
 
-Upgrading an older runtime layout? See [Upgrading To 1.4](#upgrading-to-14).
+Upgrading from an older release? See [Upgrading To 2.0](#upgrading-to-20).
 
 - Agent entry docs: [`CLAUDE.md`](CLAUDE.md) or [`AGENTS.md`](AGENTS.md)
 - Repository knowledge map: [`docs/DESIGN.md`](docs/DESIGN.md)
@@ -185,7 +175,7 @@ If you use ScholarAIO in your research, please cite:
 ```bibtex
 @software{scholaraio,
   author = {Liao, Zi-Mo},
-  title = {ScholarAIO: AI-Native Research Terminal},
+  title = {ScholarAIO: An Academic Harness for AI Agents},
   year = {2026},
   url = {https://github.com/ZimoLiao/scholaraio},
   license = {MIT}

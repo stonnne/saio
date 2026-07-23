@@ -1,3 +1,3 @@
-"""ScholarAIO — A research infrastructure for AI agents."""
+"""ScholarAIO — an academic harness for AI agents."""
 
-__version__ = "1.5.0"
+__version__ = "2.0.0"

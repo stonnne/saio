@@ -11,7 +11,7 @@
 # Core installation
 pip install scholaraio
 
-# Full installation (embed + topics + import + pdf + office + draw)
+# Full installation (embed + topics + import + pdf + office)
 pip install "scholaraio[full]"
 ```
 
@@ -30,7 +30,7 @@ cd scholaraio
 # Core only (search, export, audit)
 pip install -e .
 
-# Full installation (embed + topics + import + pdf + office + draw)
+# Full installation (embed + topics + import + pdf + office)
 pip install -e ".[full]"
 ```
 
@@ -40,14 +40,23 @@ Use the source install path when you want to inspect the codebase, edit the pack
 
 | Extra | What it adds |
 |-------|-------------|
+| `mineru-cloud` | Optional `mineru-open-api` CLI for the MinerU cloud parser path |
 | `embed` | Semantic search (sentence-transformers + FAISS) |
 | `topics` | BERTopic topic modeling |
 | `pdf` | PyMuPDF-based PDF fallback and long-PDF utilities |
 | `import` | Endnote / Zotero import |
 | `office` | DOCX / PPTX / XLSX ingest and inspection |
-| `draw` | Python helpers for Mermaid and custom SVG drawing; Graphviz `dot` and Inkscape are system tools checked by `setup check` |
-| `full` | Core research workflow extras: embed + topics + import + pdf + office + draw |
+| `full` | Core research workflow extras: embed + topics + import + pdf + office |
 | `dev` | Development tools (pytest, ruff, mypy) |
+
+Diagram generation does not need a Python `draw` extra: Mermaid, DOT, and
+drawio source generation are part of the core package. SVG rendering requires
+the Graphviz `dot` system executable, and Beamer SVG inclusion may require
+Inkscape; check both with `scholaraio setup check`.
+
+`mineru-cloud` is intentionally not included in either the base install or
+`full`. Install it only when you choose the MinerU cloud parser path; local
+MinerU, Docling, and PyMuPDF paths do not require that external CLI.
 
 ## Setup Wizard
 
@@ -74,7 +83,7 @@ scholaraio setup agent check
 `setup check` is the most complete initial diagnostic surface. It covers:
 
 - core setup items: dependency groups, `config.yaml`, LLM key, MinerU / Docling availability, parser recommendation, Graphviz `dot`, Inkscape, `contact_email`, and directory state
-- optional advanced items: Semantic Scholar API key, Zotero API key, external websearch/webextract services, and Paper2Any sidecar readiness
+- optional advanced items: Semantic Scholar API key, Zotero API key, rendered web-extraction service, and Paper2Any sidecar readiness
 
 Current setup guidance prefers **MinerU first** whenever a MinerU path is available (local service or `mineru-open-api` + token). `Docling` and then PyMuPDF remain the fallback chain when MinerU is not usable or when the user explicitly prefers a lighter parser path.
 

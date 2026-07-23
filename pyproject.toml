@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scholaraio"
-version = "1.5.0"
-description = "Scholar All-In-One — A research infrastructure for AI agents"
+version = "2.0.0"
+description = "Scholar All-In-One — an academic harness for AI agents"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.10"
 license = "MIT"
 authors = [
     {name = "Zimo Liao", email = "zimoliao@mail.ustc.edu.cn"},
 ]
-keywords = ["academic", "literature", "research", "knowledge-base", "semantic-search", "claude"]
+keywords = ["academic", "literature", "research", "knowledge-base", "agent-skills", "academic-workflow"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -28,7 +28,6 @@ dependencies = [
     "pyyaml>=6.0",
     "defusedxml>=0.7",
     "beautifulsoup4>=4.12",
-    "mineru-open-api>=0.5.9",
 ]
 
 [project.urls]
@@ -37,6 +36,9 @@ Repository = "https://github.com/zimoliao/scholaraio"
 Issues = "https://github.com/zimoliao/scholaraio/issues"
 
 [project.optional-dependencies]
+mineru-cloud = [
+    "mineru-open-api>=0.5.9",
+]
 embed = [
     "sentence-transformers>=3.0",
     "numpy>=1.24",
@@ -60,17 +62,12 @@ office = [
     "python-pptx>=1.0",
     "openpyxl>=3.1",
 ]
-draw = [
-    "cli-anything-inkscape>=1.0.0",
-    "mermaid-py>=0.3",
-]
 full = [
     "scholaraio[embed]",
     "scholaraio[topics]",
     "scholaraio[import]",
     "scholaraio[pdf]",
     "scholaraio[office]",
-    "scholaraio[draw]",
     "modelscope>=1.10",
     "curl-cffi>=0.5",
 ]

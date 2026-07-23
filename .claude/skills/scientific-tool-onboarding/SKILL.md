@@ -1,13 +1,13 @@
 ---
 name: scientific-tool-onboarding
-description: Use when adding or upgrading ScholarAIO support for a scientific computing tool, especially official docs ingestion, toolref integration, lightweight skill design, and end-to-end CLI verification.
+description: Use when evaluating, adding, or upgrading ScholarAIO support for a scientific computing tool, especially integration-gate review, official docs ingestion, toolref integration, lightweight skill design, and end-to-end CLI verification.
 ---
 
 # Scientific Tool Onboarding
 
 ## Overview
 
-把一个新科学工具接入 ScholarAIO，目标不是“写一份长教程”，而是形成这三个层次的闭环：
+先判断一个科学工具是否值得进入 ScholarAIO；只有通过 2.x integration gate 后，接入目标才是形成这三个层次的闭环，而不是“写一份长教程”：
 
 - `toolref` 能查官方接口和参数
 - 对应 `skill` 能指导 agent 何时使用、如何验证
@@ -16,6 +16,7 @@ description: Use when adding or upgrading ScholarAIO support for a scientific co
 规范参考：
 
 - 公开接入说明统一参照 [docs/guide/toolref-onboarding.md](../../../docs/guide/toolref-onboarding.md)
+- 产品边界与准入门统一参照 [docs/design-docs/2.x-public-contract.md](../../../docs/design-docs/2.x-public-contract.md)
 - 运行时行为统一参照 `scientific-runtime` skill
 
 ## When to Use
@@ -31,7 +32,20 @@ description: Use when adding or upgrading ScholarAIO support for a scientific co
 
 ## Core Workflow
 
-### 1. 先定“官方真源”
+### 0. 先过 2.x integration gate
+
+不要因为用户提到一个项目、它很热门，或官方文档可抓取，就默认把它接入 ScholarAIO。先逐项确认：
+
+- 它解决的是已经出现的核心学术任务，而不是增加一个新的平台类别
+- 当前 agent 原生能力与已有 ScholarAIO 路径不能充分完成这个任务
+- 没有另一套重叠适配器在做同一件事，并且有明确维护责任
+- 依赖、凭据和运行时可以保持可选并与 core install 隔离
+- 可以设计固定语料或端到端 smoke 来证明用户任务确实改善
+- 缺凭据、断网、上游漂移或服务不可用时，能给出可执行错误或 fallback
+
+任何一项不满足时，优先采用外部 recipe、用户自管工具或 sidecar；不要继续下面的内置接入流程。升级既有工具时也要重新过门，不因历史存在而自动保留。
+
+### 1. 再定“官方真源”
 
 优先级：
 - 官方文档站
@@ -235,6 +249,9 @@ scholaraio toolref search <tool> "<real query>"
 
 ## Common Mistakes
 
+- 没过 integration gate 就因为热度或用户随口提及而新增内置支持
+- 把 agent 已有的原生能力在 ScholarAIO 里重复实现一遍
+- 让可选集成进入 core install，或在不可用时拖垮核心工作流
 - 只看测试，不自己用 CLI
 - 第一次抓取失败后没处理脏目录
 - `page_name` 为抓取方便而设计，导致 `show` 很难用
@@ -296,6 +313,9 @@ scholaraio toolref search <tool> "<real query>"
 
 ## Quick Checklist
 
+- 已逐项通过 2.x integration gate
+- 已确认没有 agent 原生能力或现有适配器能够充分替代
+- 依赖与凭据保持可选、隔离，失败时有 actionable fallback
 - 官方文档源已确认
 - 版本策略已确认
 - 解析粒度已确认

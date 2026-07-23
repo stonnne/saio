@@ -56,6 +56,8 @@ def test_repository_knowledge_system_keeps_public_and_internal_boundaries() -> N
     for rel_path in required_public_docs + required_internal_docs:
         assert (ROOT / rel_path).exists(), f"{rel_path} should exist"
 
+    assert (ROOT / "STRATEGY.md").exists(), "STRATEGY.md should anchor product-scope decisions"
+
     design = _read("docs/DESIGN.md")
     for directory in (
         "docs/design-docs/",
@@ -82,6 +84,48 @@ def test_repository_knowledge_system_keeps_public_and_internal_boundaries() -> N
         "      - Validation:",
     ):
         assert private_nav not in mkdocs
+
+
+def test_2_x_positioning_preserves_all_in_one_and_constrains_scope() -> None:
+    strategy = _read("STRATEGY.md")
+    contract = _read("docs/design-docs/2.x-public-contract.md")
+
+    assert "All-in-One academic harness for agents" in strategy
+    assert "general autoresearch platform" in strategy
+    assert "## Integration Gate" in contract
+    assert "native capabilities" in contract
+
+    for rel_path in (
+        "README.md",
+        "README_CN.md",
+        "docs/index.md",
+        "pyproject.toml",
+        "CITATION.cff",
+    ):
+        content = _read(rel_path)
+        assert "Scholar All-in-One" in content or "Scholar All-In-One" in content
+        assert "academic harness for AI agents" in content
+
+    stale_expansion_phrases = (
+        "keep expanding as new tools",
+        "Keep adding the next scientific tool",
+        "继续扩展更多工具",
+        "系统可以继续扩展支持",
+    )
+    current_positioning_surfaces = "\n".join(
+        _read(rel_path) for rel_path in ("README.md", "README_CN.md", "docs/index.md")
+    )
+    assert not any(phrase in current_positioning_surfaces for phrase in stale_expansion_phrases)
+
+
+def test_scientific_tool_onboarding_starts_with_2_x_integration_gate() -> None:
+    skill = _read(".claude/skills/scientific-tool-onboarding/SKILL.md")
+    guide = _read("docs/guide/toolref-onboarding.md")
+
+    assert "### 0. 先过 2.x integration gate" in skill
+    assert "docs/design-docs/2.x-public-contract.md" in skill
+    assert "2.x integration gate" in guide
+    assert "external recipe, sidecar, or user-managed tool" in guide
 
 
 def test_wrappers_and_setup_docs_defer_to_shared_entry_and_reference() -> None:

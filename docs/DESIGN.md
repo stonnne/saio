@@ -2,9 +2,9 @@
 
 Status: Current map
 
-Last Updated: 2026-06-12
+Last Updated: 2026-07-21
 
-ScholarAIO is an agent-first research infrastructure. Its published repository
+ScholarAIO is an agent-first academic harness. Its published repository
 knowledge is organized for progressive disclosure: entry docs give agents a map,
 and the public `docs/` tree carries user-facing and durable design material.
 
@@ -26,6 +26,7 @@ manual: https://openai.com/index/harness-engineering/
 
 | Path | Role |
 |------|------|
+| `STRATEGY.md` | Product direction, target user, investment tracks, and explicit non-goals |
 | `docs/index.md` | Public documentation home |
 | `docs/getting-started/` | User setup and upgrade paths |
 | `docs/guide/` | User-facing workflow references |
@@ -40,11 +41,12 @@ manual: https://openai.com/index/harness-engineering/
 ## Reading Order
 
 1. Start with `AGENTS.md` for hard constraints and navigation.
-2. Use this file for the repository knowledge map.
-3. Use `docs/guide/agent-reference.md` for agent runtime and skill details.
-4. Use the relevant design doc, product spec, generated reference, or guide
+2. Read `STRATEGY.md` before changing product scope or adding integrations.
+3. Use this file for the repository knowledge map.
+4. Use `docs/guide/agent-reference.md` for agent runtime and skill details.
+5. Use the relevant design doc, product spec, generated reference, or guide
    before changing a governed area.
-5. Use source code and tests as the final authority for current behavior.
+6. Use source code and tests as the final authority for current behavior.
 
 ## Maintenance Rules
 

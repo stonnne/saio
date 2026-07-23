@@ -1,6 +1,6 @@
 publisher: ZimoLiao
 repo: ZimoLiao/scholaraio
-description: "Academic research skills for AI agents — literature search, paper analysis, citation management, academic writing, and more. Built for ScholarAIO."
+description: "Scholar All-in-One academic harness skills for AI agents — evidence-backed literature work, persistent context, reviewable outputs, and verification."
 keywords:
   - academic
   - research
@@ -124,7 +124,7 @@ skills:
 
   - name: scholaraio/draw
     path: .claude/skills/draw
-    description: "Generate diagrams (Mermaid flowcharts, sequence, ER, Gantt, mind maps) and vector graphics (cli-anything-inkscape)"
+    description: "Generate diagrams with current-agent-native Mermaid/SVG authoring plus Graphviz and editable DrawIO workflows"
 
   - name: scholaraio/document
     path: .claude/skills/document

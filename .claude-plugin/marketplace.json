@@ -5,15 +5,15 @@
     "email": "zimoliao@mail.ustc.edu.cn"
   },
   "metadata": {
-    "description": "ScholarAIO — A research infrastructure for AI agents. Search, read, analyze, and operationalize papers from your local knowledge base while coding.",
-    "version": "1.3.0"
+    "description": "Scholar All-in-One — an academic harness for AI agents. Carry evidence, project state, workflows, outputs, and verification across agent sessions.",
+    "version": "2.0.0"
   },
   "plugins": [
     {
       "name": "scholaraio",
       "source": "./",
-      "description": "Full ScholarAIO skill suite: literature search, arXiv discovery, layered reading, ingestion, topic modeling, citation graphs, insights analytics, scientific tool docs, Office document inspection, workspace management, academic writing, and more. Requires Python 3.10+; auto-installs on first session.",
-      "version": "1.3.0",
+      "description": "ScholarAIO academic harness: portable skills for evidence-backed literature work, persistent project context, reviewable outputs, and verification. Requires Python 3.10+; auto-installs on first session.",
+      "version": "2.0.0",
       "author": {
         "name": "ZimoLiao",
         "email": "zimoliao@mail.ustc.edu.cn"
@@ -35,6 +35,8 @@
         "office-documents",
         "scholarly-writing",
         "knowledge-base",
+        "agent-skills",
+        "academic-workflow",
         "semantic-search",
         "topic-modeling",
         "bibtex",

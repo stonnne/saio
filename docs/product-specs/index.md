@@ -1,14 +1,18 @@
 # Product Specs
 
-Status: Placeholder
+Status: Current index
 
-Last Updated: 2026-06-12
+Last Updated: 2026-07-21
 
 Product specs capture user-visible behavior and workflow contracts. They are
 separate from implementation plans so agents can understand what should happen
 without replaying historical work.
 
-No product spec is currently authoritative.
+The current cross-product direction lives in the repository-root
+[`STRATEGY.md`](https://github.com/zimoliao/scholaraio/blob/main/STRATEGY.md). Product specs in this directory should
+describe user-visible behavior within that boundary, while the
+[ScholarAIO 2.x Public Contract](../design-docs/2.x-public-contract.md) defines
+the compatibility policy.
 
 ## Rules
 

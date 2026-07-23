@@ -593,7 +593,7 @@ def test_convert_pdf_cloud_returns_actionable_error_when_cli_missing(tmp_path, m
 
     assert result.success is False
     assert "mineru-open-api" in (result.error or "")
-    assert "pip install" in (result.error or "")
+    assert "pip install 'scholaraio[mineru-cloud]'" in (result.error or "")
 
 
 def test_convert_pdf_cloud_surfaces_cli_failure_details(tmp_path, monkeypatch):

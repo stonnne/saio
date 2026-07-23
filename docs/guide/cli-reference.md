@@ -57,7 +57,6 @@ scholaraio top-cited
 ```text
 scholaraio pipeline [preset]
 scholaraio ingest-link <url> [<url> ...]
-scholaraio websearch <query> [--count N]
 scholaraio webextract <url> [--pdf] [--full] [--max-chars N]
 scholaraio paper2any setup [--install-runtime]
 scholaraio paper2any mcp-serve
@@ -80,8 +79,8 @@ scholaraio fetch-pdf --all [--direct] [--force]
 - `ingest-link` pulls one or more rendered web URLs or online PDFs through an external `qt-web-extractor` service and routes them into the existing document ingest flow.
 - `fetch-pdf` downloads publisher PDFs through the current user network and access context. It does not bypass access controls; use `--direct` to ignore proxy environment variables such as Clash when the campus network itself has access.
 - `fetch-pdf --ingest` sends only the fetched PDF into the ingest pipeline. Without `--out-dir`, the PDF is staged temporarily and is not left in the configured inbox; use `--out-dir` to keep a separate downloaded copy. If `--out-dir` is supplied, the PDF is saved there but ingested through an isolated temporary single-file inbox, so unrelated PDFs in that directory are not processed.
-- `websearch` performs live web search through an external `GUILessBingSearch` service; prefer `websearch.transport: mcp` with the `search_bing` tool when available, while the legacy HTTP `/search` transport remains supported.
-- `webextract` extracts rendered web content through `qt-web-extractor`; prefer `webextract.transport: mcp` with the `fetch_url` tool for agent workflows, while the legacy HTTP `/extract` transport remains supported. By default it prints a preview, and `--full` expands to the full body.
+- Use the host agent's native web search for live discovery. ScholarAIO does not expose a default discovery CLI or search MCP server.
+- `webextract` extracts rendered web content through `qt-web-extractor` when native URL reading is insufficient or ingestion-ready Markdown is required; prefer `webextract.transport: mcp` with the `fetch_url` tool, while the legacy HTTP `/extract` transport remains supported. By default it prints a preview, and `--full` expands to the full body.
 - `paper2any` starts and calls the lightweight MCP sidecar for an external OpenDCAI/Paper2Any checkout. Use it for real Paper2Any paper-to-figure, PPT, poster, video, citation, rebuttal, DrawIO, mindmap, PDF-to-PPT, image-to-PPT, and KB workflows without vendoring Paper2Any into ScholarAIO.
 - `patent-search` discovers patent candidates through USPTO PPUBS by default, with optional ODP API support.
 - `patent-fetch` downloads a patent PDF into the configured patent inbox for the normal patent ingest flow.
@@ -134,7 +133,7 @@ scholaraio migrate finalize --migration-id <id> --confirm
 - `import-endnote` and `import-zotero` bring existing libraries into ScholarAIO.
 - `export` handles BibTeX, RIS, Markdown, and DOCX export.
 - `publish-site` generates a static site from audited `published/*/metadata.json` archives, copying PDF/source assets by default and supporting `--symlink` for local preview.
-- `gui` starts a local read-only WebUI for browsing the main paper library and proceedings child papers with live refresh, audit status, Markdown-rendered abstracts/conclusions, and local PDF preview. The WebUI serves only packaged local assets and does not load remote runtime scripts.
+- `gui` starts a local, metadata-read-only WebUI with live refresh, audit status, Markdown-rendered abstracts/conclusions, composable metadata filters, server-backed Keyword/Semantic/Unified retrieval for the main library, canonical per-record BibTeX copy, inline PDF preview, and a loopback-only action for opening PDFs in the operating system's default viewer. On WSL, that action uses a stable Windows edit mirror and automatically reconciles valid PDF saves back to the canonical library copy. The WebUI serves only packaged local assets and does not load remote runtime scripts. See the [Library WebUI guide](library-webui.md).
 - `ws` manages paper subsets for focused projects and writing workflows.
 
 ## Scientific Runtime And Documents

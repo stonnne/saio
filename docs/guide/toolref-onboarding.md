@@ -2,18 +2,21 @@
 
 ScholarAIO can index official documentation for scientific computing tools through `toolref`.
 
-This guide is for users and external contributors who want to add support for a new tool without reverse-engineering the current codebase. It focuses on the public workflow and the quality bar for a production-ready integration.
+This guide is for users and external contributors evaluating or implementing support for a scientific tool without reverse-engineering the current codebase. In ScholarAIO 2.x, evaluation comes first: tool support must strengthen the academic harness rather than broaden the product by default.
 
 ## When a New Tool Is Worth Adding
 
-Add a new tool when all of the following are true:
+Before doing implementation work, apply the full [2.x integration gate](../design-docs/2.x-public-contract.md#integration-gate). Add a new tool only when all of the following are true:
 
-- users are likely to ask for the tool in natural language during real scientific work
+- a demonstrated core academic task needs the tool
+- the active agent's native capabilities and existing ScholarAIO adapters are not already adequate
 - the tool has an official documentation source that is stable enough to index
 - the tool has high-value commands, parameters, or workflows that benefit from reliable lookup
-- the integration can improve user task completion, not just increase page count
+- dependencies and credentials can remain optional and isolated from the core install
+- a fixed-corpus or end-to-end smoke can demonstrate improved user task completion
+- upstream failure has an actionable error or documented fallback
 
-Do not add a tool just because documentation exists somewhere online. A useful integration should improve `show` and `search` behavior for the queries users actually type.
+Do not add a tool just because it is popular or documentation exists somewhere online. If the gate does not pass, keep the workflow as an external recipe, sidecar, or user-managed tool instead of adding another built-in capability category.
 
 ## The Public Contract
 
@@ -288,6 +291,9 @@ If those queries are not convincing yet, improve naming, routing, and ranking be
 
 Before considering a new tool "ready enough", confirm:
 
+- the proposal passed every item in the 2.x integration gate
+- agent-native and existing ScholarAIO capabilities were considered first
+- dependencies, credentials, and failures stay isolated from the core workflow
 - the tool has a clear official documentation source
 - the chosen ingestion mode matches the shape of the upstream docs
 - `page_name`, `program`, and `section` were designed for user queries

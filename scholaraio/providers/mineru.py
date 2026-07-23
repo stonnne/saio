@@ -738,7 +738,7 @@ def convert_pdf_cloud(
     cli_path = shutil.which(MINERU_OPEN_API_BIN)
     if not cli_path:
         result.error = (
-            "未找到 mineru-open-api CLI，请先安装：`pip install mineru-open-api`，"
+            "未找到 mineru-open-api CLI，请先安装：`pip install 'scholaraio[mineru-cloud]'`，"
             "或参考 ModelScope skill / npm / go 安装方式。"
         )
         result.elapsed_seconds = time.time() - t0

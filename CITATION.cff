@@ -1,12 +1,12 @@
 cff-version: 1.2.0
 message: "If you use ScholarAIO in your research, please cite it as below."
 title: "ScholarAIO"
-abstract: "Scholar All-In-One — A research infrastructure for AI agents"
+abstract: "Scholar All-In-One — an academic harness for AI agents"
 type: software
 license: MIT
 repository-code: "https://github.com/zimoliao/scholaraio"
-version: 1.5.0
-date-released: "2026-05-24"
+version: 2.0.0
+date-released: "2026-07-21"
 authors:
   - family-names: Liao
     given-names: Zimo
@@ -15,5 +15,5 @@ keywords:
   - academic literature
   - knowledge base
   - semantic search
-  - research assistant
-  - Claude Code
+  - academic workflow
+  - agent skills

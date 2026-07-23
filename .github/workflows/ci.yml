@@ -32,6 +32,21 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: mypy scholaraio/
 
+  package-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build --wheel
+      - run: python -m venv .venv-wheel
+      - run: .venv-wheel/bin/pip install dist/*.whl
+      - run: .venv-wheel/bin/pip check
+      - run: .venv-wheel/bin/python -c "import importlib.metadata, importlib.util, scholaraio; assert scholaraio.__version__ == importlib.metadata.version('scholaraio'); assert importlib.util.find_spec('mineru_open_api') is None"
+      - run: .venv-wheel/bin/scholaraio --help
+
   test:
     runs-on: ubuntu-latest
     strategy:
