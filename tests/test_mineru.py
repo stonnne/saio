@@ -527,6 +527,43 @@ def test_convert_pdf_cloud_invokes_mineru_open_api_extract_with_token_and_flags(
     ]
 
 
+def test_convert_pdf_cloud_passes_absolute_paths_when_caller_uses_relative_paths(tmp_path, monkeypatch):
+    """The CLI runs with cwd=<pdf parent>, so relative caller paths must be resolved.
+
+    Without this, a caller passing `data/libraries/papers/<x>/supplementary.pdf`
+    makes the CLI fail with "no such file or directory".
+    """
+    paper_dir = tmp_path / "papers" / "Some-Paper"
+    paper_dir.mkdir(parents=True)
+    (paper_dir / "supplementary.pdf").write_bytes(b"%PDF-1.4")
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+
+    captured: dict[str, object] = {}
+
+    _allow_pdf_validation(monkeypatch)
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/mineru-open-api" if name == "mineru-open-api" else None)
+
+    def fake_run(cmd, *, capture_output, text, cwd, env, timeout, check):
+        captured["cmd"] = cmd
+        (output_dir / "supplementary.md").write_text("# ok\n", encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.chdir(tmp_path)
+
+    result = convert_pdf_cloud(
+        Path("papers/Some-Paper/supplementary.pdf"),
+        ConvertOptions(output_dir=Path("out")),
+        api_key="test-key",
+    )
+
+    assert result.success is True
+    cmd = captured["cmd"]
+    assert cmd[2] == str((paper_dir / "supplementary.pdf").resolve())
+    assert cmd[cmd.index("-o") + 1] == str(output_dir.resolve())
+
+
 def test_convert_pdf_cloud_omits_pdf_only_flags_for_html_model_and_passes_custom_base_url(tmp_path, monkeypatch):
     pdf_path = tmp_path / "paper.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")

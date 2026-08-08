@@ -864,7 +864,12 @@ def _build_cloud_cli_command(
     *,
     cloud_url: str,
 ) -> list[str]:
-    """Build the `mineru-open-api extract` command for a single PDF."""
+    """Build the `mineru-open-api extract` command for a single PDF.
+
+    Paths are resolved to absolute form because the caller runs the CLI with
+    ``cwd`` set to the PDF's parent directory; a relative path from the caller
+    would no longer resolve there.
+    """
     model_version = _resolve_cloud_model_version(opts)
     model_flag = "html" if model_version == "MinerU-HTML" else model_version
     timeout = max(1, int(opts.poll_timeout or DEFAULT_POLL_TIMEOUT))
@@ -872,9 +877,9 @@ def _build_cloud_cli_command(
     cmd = [
         cli_path,
         "extract",
-        str(pdf_path),
+        str(pdf_path.resolve()),
         "-o",
-        str(out_dir),
+        str(out_dir.resolve()),
         "--language",
         opts.lang,
         "--model",
