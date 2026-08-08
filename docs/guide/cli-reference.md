@@ -70,6 +70,7 @@ scholaraio backfill-abstract
 scholaraio refetch
 scholaraio translate
 scholaraio attach-pdf [--dry-run] [--force]
+scholaraio attach-asset <paper-id> <asset-pdf> [--name <stem>] [--dry-run] [--force]
 scholaraio fetch-pdf <doi-or-url-or-title> [--direct] [--out-dir <dir>] [--ingest]
 scholaraio fetch-pdf --paper <paper-id> [<paper-id> ...] [--direct] [--force]
 scholaraio fetch-pdf --all [--direct] [--force]
@@ -87,6 +88,7 @@ scholaraio fetch-pdf --all [--direct] [--force]
 - `refetch` refreshes citation counts, bibliographic metadata, and structured `references` for already ingested papers.
 - `refetch --references-only` / `--refs-only` limits the run to DOI papers whose `references` field is still empty; in single-paper mode it only updates `references`.
 - `attach-pdf` attaches a source PDF to an existing paper directory, stores it beside `paper.md` using the paper directory stem, and regenerates Markdown. It refuses to replace an existing canonical PDF unless `--force` is supplied.
+- `attach-asset` converts a supplementary PDF that sits beside an existing paper into `<name>.md` (default `--name` is the source filename stem, conventionally `supplementary`). Unlike `attach-pdf`, it **merges** extracted figures into the shared `images/` directory instead of replacing it, so images already referenced by `paper.md` are never overwritten: identical bytes are reused and a name collision with different bytes falls back to a content-hash filename. It does not re-embed or rebuild the index, because assets are not search bodies. It refuses to overwrite an existing asset Markdown or PDF unless `--force` is supplied. PDF only; Office data files such as `.xlsx` are not supported yet.
 - `fetch-pdf --paper <id> [<id> ...]` re-downloads canonical PDFs for selected existing library papers using `source_url` or DOI; `fetch-pdf --all` applies the same logic to the whole library and reports downloaded/skipped/failed counts. Refetching PDFs does not regenerate `paper.md`; use `attach-pdf` or the ingest conversion path when Markdown needs to be rebuilt.
 - Current preset values are `full`, `ingest`, `enrich`, and `reindex`.
 - Run `scholaraio pipeline --help` for pipeline options such as `--steps`, `--dry-run`, `--no-api`, and `--rebuild`.

@@ -14,6 +14,7 @@ import time
 from scholaraio.core.config import load_config
 from scholaraio.core.log import ui
 from scholaraio.interfaces.cli import arguments as _arguments_cli
+from scholaraio.interfaces.cli import attach_asset as _attach_asset_cli
 from scholaraio.interfaces.cli import attach_pdf as _attach_pdf_cli
 from scholaraio.interfaces.cli import dependencies as _dependencies_cli
 from scholaraio.interfaces.cli import diagram as _diagram_cli
@@ -100,6 +101,7 @@ _render_ingest_link_markdown = _ingest_link_cli._render_ingest_link_markdown
 _webextract_for_ingest_link = _ingest_link_cli._webextract_for_ingest_link
 cmd_attach_pdf = _attach_pdf_cli.cmd_attach_pdf
 _batch_convert_pdfs = _attach_pdf_cli._batch_convert_pdfs
+cmd_attach_asset = _attach_asset_cli.cmd_attach_asset
 
 _ResultLimitAction = _arguments_cli._ResultLimitAction
 _add_result_limit_arg = _arguments_cli._add_result_limit_arg
@@ -173,6 +175,7 @@ __all__ = [
     "_write_all_viz",
     "cmd_arxiv_fetch",
     "cmd_arxiv_search",
+    "cmd_attach_asset",
     "cmd_attach_pdf",
     "cmd_audit",
     "cmd_backfill_abstract",

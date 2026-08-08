@@ -40,6 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd_import_endnote = cli_mod.cmd_import_endnote
     cmd_import_zotero = cli_mod.cmd_import_zotero
     cmd_attach_pdf = cli_mod.cmd_attach_pdf
+    cmd_attach_asset = cli_mod.cmd_attach_asset
     cmd_fetch_pdf = cli_mod.cmd_fetch_pdf
     cmd_ingest_link = cli_mod.cmd_ingest_link
     cmd_arxiv_search = cli_mod.cmd_arxiv_search
@@ -435,6 +436,18 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ap.add_argument("pdf_path", help="PDF file path")
     p_ap.add_argument("--dry-run", action="store_true", help="Preview planned actions without running them")
     p_ap.add_argument("--force", action="store_true", help="Replace an existing canonical PDF before conversion")
+
+    # --- attach-asset ---
+    p_aa = sub.add_parser(
+        "attach-asset",
+        help="Convert a supplementary PDF beside an existing paper into Markdown",
+    )
+    p_aa.set_defaults(func=cmd_attach_asset)
+    p_aa.add_argument("paper_id", help="Paper ID (directory name / UUID / DOI)")
+    p_aa.add_argument("asset_path", help="Supplementary PDF file path")
+    p_aa.add_argument("--name", help="Output stem (default: source filename stem), e.g. supplementary")
+    p_aa.add_argument("--dry-run", action="store_true", help="Preview planned actions without running them")
+    p_aa.add_argument("--force", action="store_true", help="Overwrite an existing asset Markdown or PDF")
 
     # --- fetch-pdf ---
     p_pdf = sub.add_parser(
