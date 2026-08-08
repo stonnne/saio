@@ -35,7 +35,6 @@ from scholaraio.stores.toolref import (
 @pytest.fixture
 def toolref_mod():
     from scholaraio.stores import toolref as mod
-    from scholaraio.stores.toolref import _legacy_snapshot as legacy_mod
     from scholaraio.stores.toolref import fetch as fetch_mod
     from scholaraio.stores.toolref import indexing as indexing_mod
     from scholaraio.stores.toolref import manifest as manifest_mod
@@ -49,7 +48,6 @@ def toolref_mod():
         "fetch": fetch_mod,
         "indexing": indexing_mod,
         "search": search_mod,
-        "legacy": legacy_mod,
     }
 
 
@@ -73,7 +71,6 @@ def test_toolref_path_helpers_use_configured_root(tmp_path, toolref_mod):
     expected_db = (tmp_path / "stores" / "toolref" / "qe" / "toolref.db").resolve()
 
     assert toolref_mod["paths"]._db_path("qe", cfg) == expected_db
-    assert toolref_mod["legacy"]._db_path("qe", cfg) == expected_db
 
 
 def test_index_tool_returns_final_unique_entry_count(tmp_path, monkeypatch, toolref_mod):
@@ -1601,51 +1598,51 @@ def test_expand_search_query_adds_gromacs_aliases():
     assert "pcoupl" in expanded
 
 
-def test_score_search_result_matches_legacy_for_lammps_alias_row(toolref_mod):
+@pytest.mark.parametrize(
+    ("tool", "query", "row", "expected_score"),
+    [
+        pytest.param(
+            "lammps",
+            "fix npt",
+            {
+                "title": "fix nvt command",
+                "page_name": "lammps/fix_nh",
+                "synopsis": "fix ID group-ID style_name keyword value ... | Aliases: fix nvt, fix npt, fix nph",
+                "content": "Alias keys: |fix nvt| |fix npt| |fix nph|",
+                "section": "fix",
+                "program": "lammps",
+                "rank": -4.8,
+            },
+            (214, -4.8),
+            id="lammps-exact-alias",
+        ),
+        pytest.param(
+            "openfoam",
+            "y plus",
+            {
+                "title": "yplus",
+                "page_name": "openfoam/yPlus",
+                "synopsis": "post processing field function object",
+                "content": "y plus wall function boundary layer",
+                "section": "post-processing",
+                "program": "yPlus",
+                "rank": -7.1,
+            },
+            (343, -7.1),
+            id="openfoam-expanded-alias",
+        ),
+    ],
+)
+def test_score_search_result_contract(tool, query, row, expected_score, toolref_mod):
     search_mod = toolref_mod["search"]
-    legacy_mod = toolref_mod["legacy"]
 
-    query = "fix npt"
     normalized_query = search_mod._normalize_search_query(query)
-    expanded_query = search_mod._expand_search_query("lammps", query)
-    row = {
-        "title": "fix nvt command",
-        "page_name": "lammps/fix_nh",
-        "synopsis": "fix ID group-ID style_name keyword value ... | Aliases: fix nvt, fix npt, fix nph",
-        "content": "Alias keys: |fix nvt| |fix npt| |fix nph|",
-        "section": "fix",
-        "program": "lammps",
-        "rank": -4.8,
-    }
+    expanded_query = search_mod._expand_search_query(tool, query)
 
-    assert search_mod._score_search_result(
-        "lammps", normalized_query, expanded_query, row
-    ) == legacy_mod._score_search_result("lammps", normalized_query, expanded_query, row)
+    assert search_mod._score_search_result(tool, normalized_query, expanded_query, row) == expected_score
 
 
-def test_score_search_result_matches_legacy_for_openfoam_row(toolref_mod):
-    search_mod = toolref_mod["search"]
-    legacy_mod = toolref_mod["legacy"]
-
-    query = "y plus"
-    normalized_query = search_mod._normalize_search_query(query)
-    expanded_query = search_mod._expand_search_query("openfoam", query)
-    row = {
-        "title": "yplus",
-        "page_name": "openfoam/yPlus",
-        "synopsis": "post processing field function object",
-        "content": "y plus wall function boundary layer",
-        "section": "post-processing",
-        "program": "yPlus",
-        "rank": -7.1,
-    }
-
-    assert search_mod._score_search_result(
-        "openfoam", normalized_query, expanded_query, row
-    ) == legacy_mod._score_search_result("openfoam", normalized_query, expanded_query, row)
-
-
-def test_toolref_search_matches_legacy_tie_break_order(tmp_path, monkeypatch, toolref_mod):
+def test_toolref_search_uses_rank_to_break_equal_relevance(tmp_path, monkeypatch, toolref_mod):
     search_mod = toolref_mod["search"]
     db_path = tmp_path / "toolref.db"
     db_path.write_text("", encoding="utf-8")

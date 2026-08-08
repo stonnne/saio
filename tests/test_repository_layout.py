@@ -7,6 +7,8 @@ import inspect
 from importlib.machinery import PathFinder
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 INTERNAL_DOCS = DOCS / "internal"
@@ -538,6 +540,12 @@ def test_toolref_legacy_submodules_alias_store_submodules_for_patch_compatibilit
         assert legacy is store
 
 
+def test_toolref_legacy_snapshot_stays_out_of_runtime_package() -> None:
+    snapshot = ROOT / "scholaraio" / "stores" / "toolref" / "_legacy_snapshot.py"
+
+    assert not snapshot.exists()
+
+
 def test_webtools_provider_namespace_reexports_current_behavior() -> None:
     legacy = importlib.import_module("scholaraio.providers.webtools")
     provider = importlib.import_module("scholaraio.providers.webtools")
@@ -759,462 +767,67 @@ def test_workspace_legacy_module_aliases_project_module_for_patch_compatibility(
     assert legacy is project
 
 
-def test_translate_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.translate")
-    service = importlib.import_module("scholaraio.services.translate")
-
-    assert service.TranslateResult is legacy.TranslateResult
-    assert service.translate_paper is legacy.translate_paper
-    assert service.batch_translate is legacy.batch_translate
-    assert service.validate_lang is legacy.validate_lang
-    assert service.detect_language is legacy.detect_language
-    assert service.SKIP_ALL_CHUNKS_FAILED == legacy.SKIP_ALL_CHUNKS_FAILED
-
-
-def test_translate_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.translate")
-    service = importlib.import_module("scholaraio.services.translate")
-
-    assert legacy is service
-
-
-def test_insights_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.insights")
-    service = importlib.import_module("scholaraio.services.insights")
-
-    assert service.extract_hot_keywords is legacy.extract_hot_keywords
-    assert service.aggregate_most_read_titles is legacy.aggregate_most_read_titles
-    assert service.build_weekly_read_trend is legacy.build_weekly_read_trend
-    assert service.recommend_unread_neighbors is legacy.recommend_unread_neighbors
-    assert service.list_workspace_counts is legacy.list_workspace_counts
-
-
-def test_insights_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.insights")
-    service = importlib.import_module("scholaraio.services.insights")
-
-    assert legacy is service
-
-
-def test_metrics_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.metrics")
-    service = importlib.import_module("scholaraio.services.metrics")
-
-    assert service.LLMResult is legacy.LLMResult
-    assert service.MetricsStore is legacy.MetricsStore
-    assert service.TimerResult is legacy.TimerResult
-    assert service.call_llm is legacy.call_llm
-    assert service.timer is legacy.timer
-    assert service.timed is legacy.timed
-    assert service.get_store is legacy.get_store
-    assert service.reset is legacy.reset
-
-
-def test_metrics_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.metrics")
-    service = importlib.import_module("scholaraio.services.metrics")
-
-    assert legacy is service
-
-
-def test_metrics_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.metrics")
-    service = importlib.import_module("scholaraio.services.metrics")
-
-    source = Path(inspect.getsourcefile(service.call_llm) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "metrics.py")
-    assert legacy.call_llm is service.call_llm
-
-
-def test_backup_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.backup")
-    service = importlib.import_module("scholaraio.services.backup")
-
-    assert service.BackupConfigError is legacy.BackupConfigError
-    assert service.BackupRunResult is legacy.BackupRunResult
-    assert service.build_rsync_command is legacy.build_rsync_command
-    assert service.run_backup is legacy.run_backup
-
-
-def test_backup_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.backup")
-    service = importlib.import_module("scholaraio.services.backup")
-
-    assert legacy is service
-
-
-def test_backup_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.backup")
-    service = importlib.import_module("scholaraio.services.backup")
-
-    source = Path(inspect.getsourcefile(service.run_backup) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "backup.py")
-    assert legacy.run_backup is service.run_backup
-
-
-def test_document_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.document")
-    service = importlib.import_module("scholaraio.services.document")
-
-    assert service.inspect is legacy.inspect
-    assert service.inspect_pptx is legacy.inspect_pptx
-    assert service.inspect_docx is legacy.inspect_docx
-    assert service.inspect_xlsx is legacy.inspect_xlsx
-
-
-def test_document_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.document")
-    service = importlib.import_module("scholaraio.services.document")
-
-    assert legacy is service
-
-
-def test_document_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.document")
-    service = importlib.import_module("scholaraio.services.document")
-
-    source = Path(inspect.getsourcefile(service.inspect) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "document.py")
-    assert legacy.inspect is service.inspect
-
-
-def test_diagram_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.diagram")
-    service = importlib.import_module("scholaraio.services.diagram")
-
-    assert service.extract_diagram_ir is legacy.extract_diagram_ir
-    assert service.list_renderers is legacy.list_renderers
-    assert service.render_ir is legacy.render_ir
-    assert service.generate_diagram is legacy.generate_diagram
-    assert service.generate_diagram_with_critic is legacy.generate_diagram_with_critic
-    assert service.generate_diagram_from_text is legacy.generate_diagram_from_text
-
-
-def test_diagram_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.diagram")
-    service = importlib.import_module("scholaraio.services.diagram")
-
-    assert legacy is service
-
-
-def test_diagram_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.diagram")
-    service = importlib.import_module("scholaraio.services.diagram")
-
-    source = Path(inspect.getsourcefile(service.render_ir) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "diagram.py")
-    assert legacy.render_ir is service.render_ir
-
-
-def test_setup_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.setup")
-    service = importlib.import_module("scholaraio.services.setup")
-
-    assert service.CheckResult is legacy.CheckResult
-    assert service.ParserChoice is legacy.ParserChoice
-    assert service.check_dep_group is legacy.check_dep_group
-    assert service.recommend_pdf_parser is legacy.recommend_pdf_parser
-    assert service.run_check is legacy.run_check
-    assert service.format_check_results is legacy.format_check_results
-    assert service.run_wizard is legacy.run_wizard
-
-
-def test_setup_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.setup")
-    service = importlib.import_module("scholaraio.services.setup")
-
-    assert legacy is service
-
-
-def test_setup_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.setup")
-    service = importlib.import_module("scholaraio.services.setup")
-
-    source = Path(inspect.getsourcefile(service.run_check) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "setup.py")
-    assert legacy.run_check is service.run_check
-
-
-def test_migration_control_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.migration_control")
-    service = importlib.import_module("scholaraio.services.migration_control")
-
-    assert service.ensure_instance_metadata is legacy.ensure_instance_metadata
-    assert service.read_instance_metadata is legacy.read_instance_metadata
-    assert service.describe_migration_lock is legacy.describe_migration_lock
-    assert service.run_migration_plan is legacy.run_migration_plan
-    assert service.run_migration_verification is legacy.run_migration_verification
-    assert service.run_migration_cleanup is legacy.run_migration_cleanup
-    assert service.run_migration_store is legacy.run_migration_store
-    assert service.SUPPORTED_MIGRATION_RUN_STORES is legacy.SUPPORTED_MIGRATION_RUN_STORES
-
-
-def test_migration_control_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.migration_control")
-    service = importlib.import_module("scholaraio.services.migration_control")
-
-    assert legacy is service
-
-
-def test_migration_control_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.migration_control")
-    service = importlib.import_module("scholaraio.services.migration_control")
-
-    source = Path(inspect.getsourcefile(service.run_migration_plan) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "migration_control.py")
-    assert legacy.run_migration_plan is service.run_migration_plan
-
-
-def test_loader_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.loader")
-    service = importlib.import_module("scholaraio.services.loader")
-
-    assert service.L3_SKIP_TYPES is legacy.L3_SKIP_TYPES
-    assert service.load_l1 is legacy.load_l1
-    assert service.load_l2 is legacy.load_l2
-    assert service.load_l3 is legacy.load_l3
-    assert service.load_l4 is legacy.load_l4
-    assert service.load_notes is legacy.load_notes
-    assert service.append_notes is legacy.append_notes
-    assert service.enrich_toc is legacy.enrich_toc
-    assert service.enrich_l3 is legacy.enrich_l3
-
-
-def test_loader_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.loader")
-    service = importlib.import_module("scholaraio.services.loader")
-
-    assert legacy is service
-
-
-def test_loader_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.loader")
-    service = importlib.import_module("scholaraio.services.loader")
-
-    source = Path(inspect.getsourcefile(service.load_l4) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "loader.py")
-    assert legacy.load_l4 is service.load_l4
-
-
-def test_index_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.index")
-    service = importlib.import_module("scholaraio.services.index")
-
-    assert service.UnifiedSearchDiagnostics is legacy.UnifiedSearchDiagnostics
-    assert service.build_index is legacy.build_index
-    assert service.build_proceedings_index is legacy.build_proceedings_index
-    assert service.search is legacy.search
-    assert service.search_proceedings is legacy.search_proceedings
-    assert service.search_author is legacy.search_author
-    assert service.top_cited is legacy.top_cited
-    assert service.lookup_paper is legacy.lookup_paper
-    assert service.unified_search is legacy.unified_search
-    assert service.get_references is legacy.get_references
-    assert service.get_citing_papers is legacy.get_citing_papers
-    assert service.get_shared_references is legacy.get_shared_references
-
-
-def test_index_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.index")
-    service = importlib.import_module("scholaraio.services.index")
-
-    assert legacy is service
-
-
-def test_index_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.index")
-    service = importlib.import_module("scholaraio.services.index")
-
-    source = Path(inspect.getsourcefile(service.build_index) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "index.py")
-    assert legacy.build_index is service.build_index
-
-
-def test_vectors_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.vectors")
-    service = importlib.import_module("scholaraio.services.vectors")
-
-    assert service.QwenEmbedder is legacy.QwenEmbedder
-    assert service.build_vectors is legacy.build_vectors
-    assert service.vsearch is legacy.vsearch
-    assert service._embed_provider is legacy._embed_provider
-    assert service._embed_signature is legacy._embed_signature
-    assert service._embed_query_vector is legacy._embed_query_vector
-    assert service._ensure_vector_search_ready is legacy._ensure_vector_search_ready
-    assert service._build_faiss_from_db is legacy._build_faiss_from_db
-    assert service._vsearch_faiss is legacy._vsearch_faiss
-    assert service._pack is legacy._pack
-    assert service._unpack is legacy._unpack
-    assert service._model_cache is legacy._model_cache
-
-
-def test_vectors_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.vectors")
-    service = importlib.import_module("scholaraio.services.vectors")
-
-    assert legacy is service
-
-
-def test_vectors_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.vectors")
-    service = importlib.import_module("scholaraio.services.vectors")
-
-    source = Path(inspect.getsourcefile(service.build_vectors) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "vectors.py")
-    assert legacy.build_vectors is service.build_vectors
-
-
-def test_topics_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.topics")
-    service = importlib.import_module("scholaraio.services.topics")
-
-    assert service.build_topics is legacy.build_topics
-    assert service.get_topic_overview is legacy.get_topic_overview
-    assert service.get_topic_papers is legacy.get_topic_papers
-    assert service.get_outliers is legacy.get_outliers
-    assert service.find_related_topics is legacy.find_related_topics
-    assert service.visualize_topic_hierarchy is legacy.visualize_topic_hierarchy
-    assert service.visualize_topics_2d is legacy.visualize_topics_2d
-    assert service.visualize_barchart is legacy.visualize_barchart
-    assert service.visualize_heatmap is legacy.visualize_heatmap
-    assert service.visualize_term_rank is legacy.visualize_term_rank
-    assert service.visualize_topics_over_time is legacy.visualize_topics_over_time
-    assert service.reduce_topics_to is legacy.reduce_topics_to
-    assert service.merge_topics_by_ids is legacy.merge_topics_by_ids
-    assert service.load_model is legacy.load_model
-
-
-def test_topics_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.topics")
-    service = importlib.import_module("scholaraio.services.topics")
-
-    assert legacy is service
-
-
-def test_topics_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.topics")
-    service = importlib.import_module("scholaraio.services.topics")
-
-    source = Path(inspect.getsourcefile(service.build_topics) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "topics.py")
-    assert legacy.build_topics is service.build_topics
-
-
-def test_citation_check_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.citation_check")
-    service = importlib.import_module("scholaraio.services.citation_check")
-
-    assert service.extract_citations is legacy.extract_citations
-    assert service.check_citations is legacy.check_citations
-
-
-def test_citation_check_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.citation_check")
-    service = importlib.import_module("scholaraio.services.citation_check")
-
-    assert legacy is service
-
-
-def test_citation_check_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.citation_check")
-    service = importlib.import_module("scholaraio.services.citation_check")
-
-    source = Path(inspect.getsourcefile(service.check_citations) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "citation_check.py")
-    assert legacy.check_citations is service.check_citations
-
-
-def test_audit_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.audit")
-    service = importlib.import_module("scholaraio.services.audit")
-
-    assert service.Issue is legacy.Issue
-    assert service.audit_papers is legacy.audit_papers
-    assert service.format_report is legacy.format_report
-    assert service.list_scrub_suspects is legacy.list_scrub_suspects
-
-
-def test_audit_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.audit")
-    service = importlib.import_module("scholaraio.services.audit")
-
-    assert legacy is service
-
-
-def test_audit_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.audit")
-    service = importlib.import_module("scholaraio.services.audit")
-
-    source = Path(inspect.getsourcefile(service.audit_papers) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "audit.py")
-    assert legacy.audit_papers is service.audit_papers
-
-
-def test_export_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.export")
-    service = importlib.import_module("scholaraio.services.export")
-
-    assert service.meta_to_bibtex is legacy.meta_to_bibtex
-    assert service.export_bibtex is legacy.export_bibtex
-    assert service.meta_to_ris is legacy.meta_to_ris
-    assert service.export_ris is legacy.export_ris
-    assert service.export_markdown_refs is legacy.export_markdown_refs
-    assert service.export_docx is legacy.export_docx
-
-
-def test_export_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.export")
-    service = importlib.import_module("scholaraio.services.export")
-
-    assert legacy is service
-
-
-def test_export_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.export")
-    service = importlib.import_module("scholaraio.services.export")
-
-    source = Path(inspect.getsourcefile(service.export_bibtex) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "export.py")
-    assert legacy.export_bibtex is service.export_bibtex
-
-
-def test_patent_fetch_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.patent_fetch")
-    service = importlib.import_module("scholaraio.services.patent_fetch")
-
-    assert service.PatentFetchError is legacy.PatentFetchError
-    assert service.extract_pdf_url is legacy.extract_pdf_url
-    assert service.download_patent_pdf is legacy.download_patent_pdf
-
-
-def test_patent_fetch_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.patent_fetch")
-    service = importlib.import_module("scholaraio.services.patent_fetch")
-
-    assert legacy is service
-
-
-def test_patent_fetch_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.patent_fetch")
-    service = importlib.import_module("scholaraio.services.patent_fetch")
-
-    source = Path(inspect.getsourcefile(service.download_patent_pdf) or "")
-
-    assert source.parts[-3:] == ("scholaraio", "services", "patent_fetch.py")
-    assert legacy.download_patent_pdf is service.download_patent_pdf
+@pytest.mark.parametrize(
+    ("module_name", "symbol", "expected_parts"),
+    [
+        ("scholaraio.services.metrics", "call_llm", ("scholaraio", "services", "metrics.py")),
+        ("scholaraio.services.backup", "run_backup", ("scholaraio", "services", "backup.py")),
+        ("scholaraio.services.document", "inspect", ("scholaraio", "services", "document.py")),
+        ("scholaraio.services.diagram", "render_ir", ("scholaraio", "services", "diagram.py")),
+        ("scholaraio.services.setup", "run_check", ("scholaraio", "services", "setup.py")),
+        (
+            "scholaraio.services.migration_control",
+            "run_migration_plan",
+            ("scholaraio", "services", "migration_control.py"),
+        ),
+        ("scholaraio.services.loader", "load_l4", ("scholaraio", "services", "loader.py")),
+        ("scholaraio.services.index", "build_index", ("scholaraio", "services", "index.py")),
+        ("scholaraio.services.vectors", "build_vectors", ("scholaraio", "services", "vectors.py")),
+        ("scholaraio.services.topics", "build_topics", ("scholaraio", "services", "topics.py")),
+        (
+            "scholaraio.services.citation_check",
+            "check_citations",
+            ("scholaraio", "services", "citation_check.py"),
+        ),
+        ("scholaraio.services.audit", "audit_papers", ("scholaraio", "services", "audit.py")),
+        ("scholaraio.services.export", "export_bibtex", ("scholaraio", "services", "export.py")),
+        (
+            "scholaraio.services.patent_fetch",
+            "download_patent_pdf",
+            ("scholaraio", "services", "patent_fetch.py"),
+        ),
+        (
+            "scholaraio.services.ingest_metadata.extractor",
+            "get_extractor",
+            ("scholaraio", "services", "ingest_metadata", "extractor.py"),
+        ),
+        (
+            "scholaraio.services.ingest.pipeline",
+            None,
+            ("scholaraio", "services", "ingest", "pipeline.py"),
+        ),
+        (
+            "scholaraio.services.ingest.proceedings_volume",
+            "ingest_proceedings_markdown",
+            ("scholaraio", "services", "ingest", "proceedings_volume.py"),
+        ),
+        (
+            "scholaraio.services.ingest.parser_matrix_benchmark",
+            "run_benchmark",
+            ("scholaraio", "services", "ingest", "parser_matrix_benchmark.py"),
+        ),
+    ],
+)
+def test_service_implementation_lives_in_canonical_namespace(
+    module_name: str,
+    symbol: str | None,
+    expected_parts: tuple[str, ...],
+) -> None:
+    service = importlib.import_module(module_name)
+    target = service if symbol is None else getattr(service, symbol)
+    source = Path(inspect.getsourcefile(target) or "")
+
+    assert source.parts[-len(expected_parts) :] == expected_parts
 
 
 def test_uspto_ppubs_provider_namespace_reexports_current_behavior() -> None:
@@ -1463,61 +1076,12 @@ def test_internal_cli_wiring_utility_aliases_live_in_interface_namespace() -> No
         assert getattr(cli, binding_name) is getattr(module, binding_name)
 
 
-def test_ingest_metadata_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest_metadata")
-    service = importlib.import_module("scholaraio.services.ingest_metadata")
-
-    assert service.PaperMetadata is legacy.PaperMetadata
-    assert service.extract_metadata_from_markdown is legacy.extract_metadata_from_markdown
-    assert service.enrich_metadata is legacy.enrich_metadata
-    assert service.write_metadata_json is legacy.write_metadata_json
-    assert service.metadata_to_dict is legacy.metadata_to_dict
-    assert service.refetch_metadata is legacy.refetch_metadata
-
-
-def test_ingest_metadata_legacy_package_aliases_service_package_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest_metadata")
-    service = importlib.import_module("scholaraio.services.ingest_metadata")
-
-    assert legacy is service
-
-
 def test_ingest_metadata_legacy_submodules_alias_service_submodules_for_patch_compatibility() -> None:
     for name in ("_abstract", "_api", "_cli", "_doc_extract", "_extract", "_models", "_writer"):
         legacy = importlib.import_module(f"scholaraio.services.ingest_metadata.{name}")
         service = importlib.import_module(f"scholaraio.services.ingest_metadata.{name}")
 
         assert legacy is service
-
-
-def test_ingest_extractor_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest_metadata.extractor")
-    service = importlib.import_module("scholaraio.services.ingest_metadata.extractor")
-
-    assert service.MetadataExtractor is legacy.MetadataExtractor
-    assert service.RegexExtractor is legacy.RegexExtractor
-    assert service.LLMExtractor is legacy.LLMExtractor
-    assert service.FallbackExtractor is legacy.FallbackExtractor
-    assert service.RobustExtractor is legacy.RobustExtractor
-    assert service.get_extractor is legacy.get_extractor
-    assert service._extract_patent_number is legacy._extract_patent_number
-
-
-def test_ingest_extractor_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest_metadata.extractor")
-    service = importlib.import_module("scholaraio.services.ingest_metadata.extractor")
-
-    assert legacy is service
-
-
-def test_ingest_extractor_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest_metadata.extractor")
-    service = importlib.import_module("scholaraio.services.ingest_metadata.extractor")
-
-    source = Path(inspect.getsourcefile(service.get_extractor) or "")
-
-    assert source.parts[-4:] == ("scholaraio", "services", "ingest_metadata", "extractor.py")
-    assert legacy.get_extractor is service.get_extractor
 
 
 def test_ingest_pipeline_paper_global_steps_live_in_service_namespace() -> None:
@@ -1596,26 +1160,6 @@ def test_ingest_pipeline_step_registry_lives_in_service_namespace() -> None:
     assert pipeline.PRESETS is step_registry.PRESETS
     assert pipeline._DOC_INBOX_STEPS is step_registry.DOC_INBOX_STEPS
     assert pipeline._OFFICE_EXTENSIONS is step_registry.OFFICE_EXTENSIONS
-
-
-def test_ingest_pipeline_service_namespace_aliases_legacy_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.pipeline")
-    service = importlib.import_module("scholaraio.services.ingest.pipeline")
-
-    assert legacy is service
-    assert service.run_pipeline is legacy.run_pipeline
-    assert service.import_external is legacy.import_external
-    assert service.batch_convert_pdfs is legacy.batch_convert_pdfs
-
-
-def test_ingest_pipeline_facade_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.pipeline")
-    service = importlib.import_module("scholaraio.services.ingest.pipeline")
-
-    source = Path(service.__file__ or "")
-
-    assert source.parts[-4:] == ("scholaraio", "services", "ingest", "pipeline.py")
-    assert legacy is service
 
 
 def test_ingest_pipeline_path_helpers_live_in_service_namespace() -> None:
@@ -1710,62 +1254,6 @@ def test_ingest_pipeline_proceedings_helpers_live_in_service_namespace() -> None
     proceedings = importlib.import_module("scholaraio.services.ingest.proceedings")
 
     assert pipeline._ingest_proceedings_ctx is proceedings.ingest_proceedings_ctx
-
-
-def test_ingest_proceedings_volume_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.proceedings_volume")
-    service = importlib.import_module("scholaraio.services.ingest.proceedings_volume")
-
-    assert service.build_proceedings_clean_candidates is legacy.build_proceedings_clean_candidates
-    assert service.apply_proceedings_clean_plan is legacy.apply_proceedings_clean_plan
-    assert service.apply_proceedings_split_plan is legacy.apply_proceedings_split_plan
-    assert service.ingest_proceedings_markdown is legacy.ingest_proceedings_markdown
-
-
-def test_ingest_proceedings_legacy_module_aliases_volume_service_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.proceedings_volume")
-    service = importlib.import_module("scholaraio.services.ingest.proceedings_volume")
-
-    assert legacy is service
-
-
-def test_ingest_proceedings_volume_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.proceedings_volume")
-    service = importlib.import_module("scholaraio.services.ingest.proceedings_volume")
-
-    source = Path(inspect.getsourcefile(service.ingest_proceedings_markdown) or "")
-
-    assert source.parts[-4:] == ("scholaraio", "services", "ingest", "proceedings_volume.py")
-    assert legacy.ingest_proceedings_markdown is service.ingest_proceedings_markdown
-
-
-def test_parser_matrix_benchmark_service_namespace_reexports_current_behavior() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.parser_matrix_benchmark")
-    service = importlib.import_module("scholaraio.services.ingest.parser_matrix_benchmark")
-
-    assert service.RunConfig is legacy.RunConfig
-    assert service.expand_run_configs is legacy.expand_run_configs
-    assert service.run_benchmark is legacy.run_benchmark
-    assert service.run_one is legacy.run_one
-    assert service.summarize_results is legacy.summarize_results
-    assert service.render_summary is legacy.render_summary
-
-
-def test_parser_matrix_benchmark_legacy_module_aliases_service_module_for_patch_compatibility() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.parser_matrix_benchmark")
-    service = importlib.import_module("scholaraio.services.ingest.parser_matrix_benchmark")
-
-    assert legacy is service
-
-
-def test_parser_matrix_benchmark_implementation_lives_in_service_namespace() -> None:
-    legacy = importlib.import_module("scholaraio.services.ingest.parser_matrix_benchmark")
-    service = importlib.import_module("scholaraio.services.ingest.parser_matrix_benchmark")
-
-    source = Path(inspect.getsourcefile(service.run_benchmark) or "")
-
-    assert source.parts[-4:] == ("scholaraio", "services", "ingest", "parser_matrix_benchmark.py")
-    assert legacy.run_benchmark is service.run_benchmark
 
 
 def test_agent_and_skill_discovery_surfaces_remain_at_repository_root() -> None:

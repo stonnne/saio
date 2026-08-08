@@ -1,10 +1,15 @@
 # ScholarAIO Code and Dependency Technical-Debt Audit
 
-Status: Current baseline
+Status: Historical baseline with tracked resolutions
 
 Audited: 2026-07-21
 
 Repository revision: `387de9bf7a49fa2aee3b201a58f374268e114314`
+
+Update note (2026-07-29): PR #130 resolved TD-07 by removing the shipped
+Toolref legacy snapshot and replacing its differential-oracle coverage with
+explicit contract tests. The baseline counts and remaining evidence below stay
+pinned to the audited repository revision unless a finding is marked resolved.
 
 ## 1. Executive Summary
 
@@ -300,7 +305,11 @@ coordinate migrations, ingestion, external requests, and large CLI branches.
 - Add a modest coverage floor or changed-line coverage check only after recording
   the current clean-CI baseline.
 
-### TD-07 — P2 — a 2,433-line legacy implementation is shipped as a test oracle
+### TD-07 — Resolved 2026-07-29 — shipped legacy Toolref test oracle
+
+PR #130 removed `scholaraio/stores/toolref/_legacy_snapshot.py` from the
+installed package. Explicit score goldens and tie-break contract tests now
+cover the behavior that depended on the differential oracle.
 
 **Evidence**
 

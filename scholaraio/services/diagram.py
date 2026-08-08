@@ -563,13 +563,6 @@ def _render_mermaid(ir: dict, out_path: Path | None = None) -> Path | str:
     return out_path
 
 
-# --- 2.4 未来扩展占位（Inkscape / AI 文生图） ---
-# @_register("png")
-# def _render_png(ir: dict, out_path: Path | None = None) -> Path | str:
-#    """IR → cli-anything-inkscape → PNG。"""
-#    raise NotImplementedError("png 渲染器尚未实现")
-
-
 # ---------------------------------------------------------------------------
 # 3. 渲染分发
 # ---------------------------------------------------------------------------
