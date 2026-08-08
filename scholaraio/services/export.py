@@ -33,9 +33,13 @@ def _bibtex_escape(text: object) -> str:
 
 
 def _make_cite_key(meta: dict) -> str:
-    """Generate a BibTeX citation key: LastName2023Title."""
-    last = str(meta.get("first_author_lastname") or "Unknown")
-    last = re.sub(r"[^a-zA-Z]", "", last)
+    """Generate a BibTeX citation key: LastName2023Title.
+
+    Not unique on its own: two papers by the same author in the same year whose
+    titles start with the same word collide. Run ``_disambiguate_keys`` over a
+    whole export to append a/b/c suffixes.
+    """
+    last = re.sub(r"[^a-zA-Z]", "", str(meta.get("first_author_lastname") or ""))
     year = str(meta.get("year") or "")
     title = str(meta.get("title") or "")
     # first meaningful word of title (skip short words)
@@ -45,7 +49,44 @@ def _make_cite_key(meta: dict) -> str:
         if len(cleaned) > 3:
             word = cleaned.capitalize()
             break
+    # Non-Latin author names (CJK, Cyrillic) strip to nothing above. Falling back
+    # only when the field is *missing* was not enough: a present-but-non-Latin
+    # name left the key as a bare year, so every such paper produced the same key.
+    if not last:
+        last = "Unknown"
     return f"{last}{year}{word}"
+
+
+def _key_suffix(index: int) -> str:
+    """0 -> 'a', 25 -> 'z', 26 -> 'aa', ..."""
+    out = ""
+    n = index
+    while True:
+        out = chr(ord("a") + n % 26) + out
+        n = n // 26 - 1
+        if n < 0:
+            return out
+
+
+def _disambiguate_keys(keys: list[str]) -> list[str]:
+    """Append a/b/c... to keys that would otherwise repeat.
+
+    A duplicate key is not cosmetic: BibTeX keeps one entry per key, so every
+    ``\\cite`` resolves to the same paper, and biber fails outright. Suffixes
+    follow the caller's order, so an unchanged library exports unchanged keys.
+    """
+    totals: dict[str, int] = {}
+    for key in keys:
+        totals[key] = totals.get(key, 0) + 1
+    used: dict[str, int] = {}
+    out: list[str] = []
+    for key in keys:
+        if totals[key] == 1:
+            out.append(key)
+            continue
+        out.append(key + _key_suffix(used.get(key, 0)))
+        used[key] = used.get(key, 0) + 1
+    return out
 
 
 def _type_to_bibtex(paper_type: str) -> str:
@@ -80,17 +121,21 @@ def _bibtex_authors(authors: object) -> str:
     return str(authors or "").strip()
 
 
-def meta_to_bibtex(meta: dict) -> str:
+def meta_to_bibtex(meta: dict, *, key: str | None = None) -> str:
     """Convert a single meta.json dict to a BibTeX entry string.
 
     Args:
         meta: Paper metadata dictionary.
+        key: Citation key to use. Omit to derive one from ``meta``; batch
+            exporters pass a key that has already been made unique across the
+            batch (see ``_disambiguate_keys``).
 
     Returns:
         Formatted BibTeX entry string.
     """
     entry_type = _type_to_bibtex(meta.get("paper_type") or "")
-    key = _make_cite_key(meta)
+    if key is None:
+        key = _make_cite_key(meta)
 
     fields: list[tuple[str, str]] = []
 
@@ -151,7 +196,7 @@ def export_bibtex(
 
     year_start, year_end = parse_year_range(year) if year else (None, None)
 
-    entries: list[str] = []
+    selected: list[dict] = []
     for d in iter_paper_dirs(papers_dir):
         if paper_ids and d.name not in paper_ids:
             continue
@@ -169,7 +214,12 @@ def export_bibtex(
         if paper_type and paper_type.lower() not in (meta.get("paper_type") or "").lower():
             continue
 
-        entries.append(meta_to_bibtex(meta))
+        selected.append(meta)
+
+    # Keys must be unique across the file, so they can only be settled once the
+    # whole selection is known.
+    keys = _disambiguate_keys([_make_cite_key(meta) for meta in selected])
+    entries = [meta_to_bibtex(meta, key=key) for meta, key in zip(selected, keys)]
 
     return "\n\n".join(entries) + "\n" if entries else ""
 

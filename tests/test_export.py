@@ -6,6 +6,10 @@ Does NOT test: internal helper functions, exact string formatting.
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
 from scholaraio.services.export import export_bibtex, meta_to_bibtex
 
 
@@ -119,3 +123,80 @@ class TestExportBibtex:
     def test_empty_result_returns_empty_string(self, tmp_papers):
         result = export_bibtex(tmp_papers, year="1900")
         assert result == ""
+
+
+def _write_paper(papers_dir: Path, dir_name: str, meta: dict) -> None:
+    """Write a minimal paper directory so export_bibtex picks it up."""
+    d = papers_dir / dir_name
+    d.mkdir(parents=True)
+    (d / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+
+
+def _cite_keys(bibtex: str) -> list[str]:
+    return re.findall(r"^@\w+\{([^,]+),", bibtex, re.M)
+
+
+class TestCiteKeyUniqueness:
+    """Every entry in one export must carry a distinct key.
+
+    BibTeX keeps a single entry per key, so a duplicate silently points every
+    ``\\cite`` at the same paper (and biber fails outright) -- a real library hit
+    both failure modes below: two Murray 1926 PNAS papers, and two Chinese-language
+    articles whose keys degenerated to the bare year ``2022``.
+    """
+
+    def test_same_author_year_and_title_word_get_distinct_keys(self, tmp_path: Path):
+        papers_dir = tmp_path / "papers"
+        papers_dir.mkdir()
+        for n, subtitle in ((1, "part one"), (2, "part two")):
+            _write_paper(
+                papers_dir,
+                f"Murray-1926-Physiological-{n}",
+                {
+                    "title": f"The Physiological Principle of Minimum Work, {subtitle}",
+                    "authors": ["Cecil D. Murray"],
+                    "first_author_lastname": "Murray",
+                    "year": 1926,
+                    "paper_type": "journal-article",
+                },
+            )
+
+        keys = _cite_keys(export_bibtex(papers_dir))
+
+        assert len(keys) == 2
+        assert len(set(keys)) == 2
+        assert sorted(keys) == ["Murray1926Physiologicala", "Murray1926Physiologicalb"]
+
+    def test_non_latin_names_do_not_collapse_to_the_bare_year(self, tmp_path: Path):
+        papers_dir = tmp_path / "papers"
+        papers_dir.mkdir()
+        for n, (title, author) in enumerate(
+            (("基于等效孔隙网络模型的水动力弥散数值模拟", "张兴昊"), ("中国脑科学计划进展", "陆林")),
+        ):
+            _write_paper(
+                papers_dir,
+                f"CJK-2022-{n}",
+                {
+                    "title": title,
+                    "authors": [author],
+                    "first_author_lastname": author,
+                    "year": 2022,
+                    "paper_type": "journal-article",
+                },
+            )
+
+        keys = _cite_keys(export_bibtex(papers_dir))
+
+        assert len(set(keys)) == 2
+        # A bare year is what the old key builder produced once the non-Latin
+        # characters were stripped away.
+        assert not any(key.strip("ab") == "2022" for key in keys)
+
+    def test_keys_that_were_already_unique_are_left_alone(self, tmp_papers: Path):
+        keys = _cite_keys(export_bibtex(tmp_papers))
+
+        assert len(set(keys)) == len(keys)
+        assert not any(key.endswith(("a", "b")) and key[:-1] in keys for key in keys)
+
+    def test_export_is_reproducible(self, tmp_papers: Path):
+        assert export_bibtex(tmp_papers) == export_bibtex(tmp_papers)
