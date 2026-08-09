@@ -139,11 +139,14 @@ def _cmd_backend_serve(args: argparse.Namespace, cfg: object) -> None:
         sys.exit(1)
 
 
+_HEALTH_CHECK_TIMEOUT = 10
+
+
 def _cmd_status(cfg: object) -> None:
     from scholaraio.providers.paper2any import Paper2AnyError, Paper2AnyServiceUnavailableError, call_paper2any_tool
 
     try:
-        result = call_paper2any_tool("paper2any_status", {}, cfg=cfg)
+        result = call_paper2any_tool("paper2any_status", {}, cfg=cfg, timeout=_HEALTH_CHECK_TIMEOUT)
     except Paper2AnyServiceUnavailableError as exc:
         _ui(f"Error: {exc}")
         _ui("Hint: start the sidecar with `scholaraio paper2any mcp-serve`.")
@@ -160,7 +163,7 @@ def _cmd_tools(cfg: object) -> None:
     from scholaraio.providers.paper2any import Paper2AnyError, Paper2AnyServiceUnavailableError, list_paper2any_tools
 
     try:
-        tools = list_paper2any_tools(cfg=cfg)
+        tools = list_paper2any_tools(cfg=cfg, timeout=_HEALTH_CHECK_TIMEOUT)
     except Paper2AnyServiceUnavailableError as exc:
         _ui(f"Error: {exc}")
         _ui("Hint: start the sidecar with `scholaraio paper2any mcp-serve`.")

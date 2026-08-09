@@ -44,10 +44,10 @@ def cmd_backfill_abstract(args: argparse.Namespace, cfg) -> None:
         _log_error("Papers directory does not exist: %s", papers_dir)
         sys.exit(1)
 
-    action = "Preview backfill" if args.dry_run else "Backfill abstracts"
+    action = "Preview backfilling abstracts" if args.dry_run else "Backfilling abstracts"
     doi_fetch = getattr(args, "doi_fetch", False)
     source = "official DOI sources" if doi_fetch else "local .md plus LLM fallback"
-    _ui(f"{action}abstracts ({source})...\n")
+    _ui(f"{action} ({source})...\n")
     stats = backfill_abstracts(papers_dir, dry_run=args.dry_run, doi_fetch=doi_fetch, cfg=cfg)
     parts = [f"{stats['filled']} filled", f"{stats['skipped']} skipped", f"{stats['failed']} failed"]
     if stats.get("updated"):

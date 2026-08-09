@@ -2,32 +2,11 @@
 name: research-proposal
 description: >
   Use when the user asks to write or draft a PhD / doctoral research proposal,
-  research plan, 研究计划书, or 开题报告 — a forward-looking plan of background,
-  gap, research questions, methodology, timeline, and significance, in English or
-  Chinese. Triggers: "write a research proposal", "PhD proposal", "doctoral
-  proposal", "研究计划书", "开题报告", "写博士研究计划". Not for backward-looking
-  literature reviews / 综述 / surveys (use medical-imaging-review), nor grant
-  forms bound to a funder's own template (国自然/NSF).
-metadata:
-  author: user
-  version: "2.0.0"
-allowed-tools:
-  - WebSearch
-  - WebFetch
-  - Read
-  - Write
-  - Edit
-  - AskUserQuestion
-  - Glob
-  - Grep
-  - mcp__zotero__zotero_search_items
-  - mcp__zotero__zotero_get_item_metadata
-  - mcp__zotero__zotero_get_item_fulltext
-  - mcp__zotero__zotero_get_annotations
-  - mcp__zotero__zotero_get_notes
-  - mcp__zotero__zotero_search_notes
-  - mcp__zotero__zotero_semantic_search
-  - mcp__zotero__zotero_advanced_search
+  research plan, 研究计划书, or 开题报告 with background, gap, research questions,
+  methodology, timeline, and significance, in English or Chinese. Triggers:
+  "write a research proposal", "PhD proposal", "doctoral proposal", "研究计划书",
+  "开题报告", "写博士研究计划". Not for backward-looking literature reviews / 综述 /
+  surveys, nor grant forms bound to a funder's own template (国自然/NSF).
 ---
 
 # Research Proposal Generator

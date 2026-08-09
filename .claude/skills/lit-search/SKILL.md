@@ -1,6 +1,6 @@
 ---
 name: lit-search
-description: Runs an exhaustive time-windowed literature search over a research topic and delivers a quality-tiered DOI list plus a matching formatted reference list, with measurable recall (gold-set recall, PRISMA counts, citation-closure saturation). Use for systematic reviews / SLR, 开题报告, 挑战赛调研, or any "把某方向近 N 年文献检索全/理一遍/梳理一遍/查全" request. Builds the corpus — not for reading or summarizing the papers themselves, and not for writing the review text. Not for casual "find me a few papers" lookups.
+description: Use when the user needs an exhaustive, time-windowed literature search over a topic — systematic reviews/SLR, 开题报告, 挑战赛调研, or "把某方向近 N 年文献检索全/理一遍/梳理一遍/查全" — with measurable recall (gold-set recall, PRISMA counts, citation-closure saturation), delivering a quality-tiered DOI list plus matching references. Builds the corpus only — not for reading/summarizing papers or writing the review text. Not for casual "find a few papers" lookups.
 ---
 
 # 时间窗受限的高召回文献检索
