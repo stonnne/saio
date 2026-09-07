@@ -12,6 +12,7 @@ must stay true, not just what one implementation plan happened to do.
 | Document | Scope |
 |----------|-------|
 | `2.x-public-contract.md` | Stable 2.x surfaces, change policy, product boundary, and third-party integration gate |
+| `backup-restore.md` | Data-only compatibility, full instance backup layout, restore safety, and secret handling |
 | `directory-structure-spec.md` | Current runtime directory layout and path ownership |
 | `migration-mechanism-spec.md` | Migration control-plane contract, journal, locking, and cleanup gates |
 | `directory-migration-sequence.md` | Historical compatibility-window execution order |

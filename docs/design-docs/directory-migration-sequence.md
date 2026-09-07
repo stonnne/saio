@@ -312,9 +312,8 @@ Implication:
 
 Current behavior:
 
-- `services/backup.py` syncs `cfg.backup_source_dir`
-- default backup scope is still `data/`
-- the backup feature does not automatically cover `workspace/`, config files, or future migration-control metadata
+- `services/backup.py` keeps `scope: data` as the compatibility default and syncs `cfg.backup_source_dir`
+- opt-in `scope: instance` targets cover config, data, workspace, published archives, and migration-control metadata with a restore manifest
 
 Implication:
 

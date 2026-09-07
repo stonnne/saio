@@ -2,7 +2,7 @@
 
 Status: Current index
 
-Last Updated: 2026-07-21
+Last Updated: 2026-08-16
 
 Validation docs record how ScholarAIO behavior was checked. They are evidence,
 not design intent.
@@ -14,6 +14,7 @@ not design intent.
 
 ## Reports
 
+- `reports/release-2.0.0-self-check-20260816.md`
 - `reports/release-2.0.0-beta.1-self-check-20260721.md`
 - `reports/upgrade-validation-report-20260423.md`
 - `reports/upgrade-validation-report-20260424.md`

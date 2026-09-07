@@ -17,11 +17,11 @@ third-party scientific package.
 
 ## Upgrade From 1.4 Or 1.5
 
-No data migration is required. Back up the runtime as usual, update the package,
+No data migration is required. Create a backup, update the package from PyPI,
 and run the normal diagnostics:
 
 ```bash
-pip install -U "scholaraio[full]"
+python -m pip install --upgrade "scholaraio[full]>=2,<3"
 scholaraio setup check
 scholaraio index --rebuild
 ```
@@ -35,19 +35,36 @@ pip install -e ".[full]"
 
 The final command above must be run from the ScholarAIO repository root.
 
-## Testing The Beta
+For a portable recovery point rather than a data-only rsync, configure an
+instance-scoped target and run it before upgrading. See
+[Configuration](configuration.md#backup-targets) for the full backup and restore
+contract.
 
-The current release workflow validates prerelease tags without publishing them
-to PyPI. To test `v2.0.0-beta.1`, use a separate source checkout:
+## Upgrade From 2.0.0 Beta 1
+
+`v2.0.0-beta.1` was a GitHub-only prerelease whose installed package metadata
+already reported `2.0.0`. Pip can therefore consider the stable artifact equal
+to an installed beta. Replace the package explicitly when moving from that
+prerelease:
 
 ```bash
-git clone --branch v2.0.0-beta.1 https://github.com/zimoliao/scholaraio.git scholaraio-2.0-beta
-cd scholaraio-2.0-beta
-pip install -e .
+python -m pip install --force-reinstall --no-deps "scholaraio==2.0.0"
+python -m pip check
 scholaraio setup check
 ```
 
-Keep an existing production checkout unchanged while evaluating the beta.
+For a beta source checkout, fetch the stable tag and reinstall from that clean
+checkout instead:
+
+```bash
+git fetch origin --tags
+git checkout v2.0.0
+python -m pip install -e ".[full]"
+scholaraio setup check
+```
+
+Keep the existing runtime backup until the stable installation and index rebuild
+have both completed successfully.
 
 ## Upgrade From 1.3 Or Earlier
 

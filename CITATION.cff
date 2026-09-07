@@ -6,7 +6,7 @@ type: software
 license: MIT
 repository-code: "https://github.com/zimoliao/scholaraio"
 version: 2.0.0
-date-released: "2026-07-21"
+date-released: "2026-08-17"
 authors:
   - family-names: Liao
     given-names: Zimo

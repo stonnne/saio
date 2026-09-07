@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from scholaraio.services.chunks import build_chunk_index, chunk_search, iter_paper_chunks
-from scholaraio.services.index import build_index
+from scholaraio.services.index import build_index, search
 
 
 def _write_paper(
@@ -279,6 +279,28 @@ def test_chunk_search_honors_year_journal_and_type_filters(tmp_path: Path) -> No
     assert filtered[0]["year"] == "2024"
     assert filtered[0]["journal"] == "Physics of Fluids"
     assert filtered[0]["paper_type"] == "review"
+
+
+def test_chunk_and_regular_search_share_normalized_type_filters(tmp_path: Path) -> None:
+    papers_dir = tmp_path / "papers"
+    db_path = tmp_path / "index.db"
+    _write_paper(
+        papers_dir,
+        "Lovelace-2024-Normalized-Review",
+        paper_id="paper-normalized-review",
+        title="Normalized review evidence retrieval",
+        paper_type="Review",
+        year=2024,
+        md_text="# Normalized review evidence retrieval\n\n# Evidence\nnormalized marker evidence",
+    )
+
+    build_index(papers_dir, db_path)
+    build_chunk_index(papers_dir, db_path)
+
+    regular_ids = {result["paper_id"] for result in search("normalized", db_path, paper_type="review")}
+    chunk_ids = {result["paper_id"] for result in chunk_search("normalized", db_path, paper_type="review")}
+
+    assert regular_ids == chunk_ids == {"paper-normalized-review"}
 
 
 def test_chunk_content_hash_uses_full_sha256_digest(tmp_path: Path) -> None:

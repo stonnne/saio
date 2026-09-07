@@ -133,7 +133,10 @@ translate:
 backup:
   source_dir: data # Local directory to sync 本地备份源目录（默认整个 data）
   rsync_bin: rsync # rsync executable 可执行文件名或绝对路径
-  ssh_bin: ssh # ssh executable 可执行文件名或绝对路径；backup run 会强制追加 -o BatchMode=yes
+  ssh_bin: ssh # ssh executable；key auth uses BatchMode, password auth uses internal SSH_ASKPASS
+  connect_timeout_seconds: 15 # SSH connection deadline
+  io_timeout_seconds: 300 # Fail when rsync makes no I/O progress for this long
+  process_timeout_seconds: 86400 # Overall backup/restore subprocess deadline
   targets: {}
   # targets:
   #   lab:
@@ -143,10 +146,12 @@ backup:
   #     port: 22
   #     identity_file: ~/.ssh/id_ed25519 # Prefer placing secrets/host-specific overrides in config.local.yaml
   #     password: "" # Optional fallback for password-only hosts; keep it only in config.local.yaml
+  #     scope: data # data (legacy source_dir sync) | instance (restorable config + data + workspace + published + control)
   #     mode: default # default | append | append-verify
   #     compress: true
   #     enabled: true
   #     exclude: ["*.tmp", "metrics.db"]
+  # Instance scope requires mode: default, no exclude patterns, and a dedicated remote directory.
   # Prepare SSH keys or a config.local.yaml password override, plus known_hosts; backup run is non-interactive.
 
 # Static published-paper site generation 发布站点生成

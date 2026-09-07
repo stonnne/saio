@@ -276,15 +276,19 @@ class TestCliHelpLocalization:
 
         assert "directory name / UUID / DOI" in refetch_help
 
-    def test_backup_help_exposes_list_and_run_subcommands(self):
+    def test_backup_help_exposes_list_run_and_restore_subcommands(self):
         parser = cli._build_parser()
         backup_parser = parser._subparsers._group_actions[0].choices["backup"]
         backup_help = backup_parser.format_help()
         run_help = backup_parser._subparsers._group_actions[0].choices["run"].format_help()
+        restore_help = backup_parser._subparsers._group_actions[0].choices["restore"].format_help()
 
-        assert "Incremental backup with rsync" in backup_help
+        assert "Backup and restore with rsync" in backup_help
         assert "List configured backup targets" in backup_help
         assert "Preview rsync actions without transferring files" in run_help
+        assert "Restore a full instance backup" in backup_help
+        assert "Runtime-instance directory to restore into" in restore_help
+        assert "Allow merging into a non-empty destination" in restore_help
 
     def test_patent_fetch_help_uses_configured_inbox_label(self):
         parser = cli._build_parser()

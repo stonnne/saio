@@ -155,9 +155,12 @@ scholaraio backup
 - `document` provides Office-document utilities such as inspection.
 - `diagram` generates editable scientific diagrams from paper content or structured text. See the [Graphviz Diagram Guide](../writing-guide/graphviz-guide.md) for DOT/SVG workflows.
 - `style` manages citation styles.
-- `backup` lists configured rsync targets and runs a named backup plan.
-- `backup run` is intentionally non-interactive: SSH is launched with `BatchMode=yes`, so key-based auth and host trust must already be prepared.
-- If a target stores `password` in `config.local.yaml`, ScholarAIO switches to an internal non-interactive askpass path instead of waiting for a terminal prompt.
+- `backup` lists configured rsync targets, runs named backup plans, and restores full instance backups.
+- Targets with `scope: data` retain the legacy configured-directory sync. Targets with `scope: instance` preserve config files, data, workspaces, published archives, and instance control metadata under their normal relative paths.
+- Real instance backups stage and verify standalone SQLite online-backup copies instead of transferring live database/WAL/SHM file sets. Connection, idle-I/O, and overall process deadlines are configurable under `backup`.
+- `backup restore <target> --destination <dir>` validates the remote instance manifest before restoring. Non-empty destinations require `--force`.
+- Backup and restore are intentionally non-interactive. Key targets use `BatchMode=yes`; password targets use the internal askpass path instead of waiting for a terminal prompt.
+- Instance backups include `config.local.yaml` when present. Secrets are encrypted in transit by SSH but remain plaintext files on remote storage; environment-only API keys are not captured.
 - A good first-run sequence is `ssh-keyscan ... >> ~/.ssh/known_hosts`, then `ssh -i <key> -p <port> <user>@<host> true`, then `scholaraio backup run <target> --dry-run`.
 
 ## Audit, Setup, And Runtime Inspection

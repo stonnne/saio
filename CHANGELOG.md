@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-08-17
+
+ScholarAIO 2.0.0 is the first stable release in the 2.x line. It includes all
+changes from `2.0.0-beta.1` plus the post-beta additions and fixes below.
+
+### Added
+
+- **Full-instance backup and one-click restore** ([#133](https://github.com/ZimoLiao/scholaraio/pull/133)): Added opt-in `scope: instance` targets that preserve `config.yaml`, optional `config.local.yaml`, configured data and workspace roots, published outputs, and instance control state behind a versioned manifest. The new `scholaraio backup restore` command validates the manifest, rejects unsafe paths and accidental non-empty destinations, supports dry runs, and reapplies owner-only permissions to restored local secrets. Existing targets remain data-only unless explicitly changed.
+
+### Changed
+
+- **Stable distribution metadata**: Promoted the Python package classifier from Beta to Production/Stable, aligned citation metadata with the stable release date, and replaced beta-only installation guidance with the supported PyPI upgrade path.
+- **Confirmed dead-code cleanup** ([#130](https://github.com/ZimoLiao/scholaraio/pull/130)): Removed an unused diagram helper and the obsolete Toolref legacy snapshot after repository-wide runtime-reference verification, reducing maintenance surface without changing supported behavior.
+
+### Fixed
+
+- **Backup consistency, integrity, and bounded execution** ([#132](https://github.com/ZimoLiao/scholaraio/issues/132), [#134](https://github.com/ZimoLiao/scholaraio/pull/134)): Instance backups now stage recognized SQLite databases through the online backup API, verify them with `quick_check`, exclude transient WAL/SHM/journal sidecars, mirror deletions, preserve restricted path metadata, and revalidate databases after restore. SSH connection, rsync I/O, and overall process deadlines now fail with actionable errors instead of waiting indefinitely.
+- **Chunk paper-type filtering** ([#132](https://github.com/ZimoLiao/scholaraio/issues/132), [#134](https://github.com/ZimoLiao/scholaraio/pull/134)): Chunk indexes now use the same metadata-aware paper-type normalization contract as regular indexes, so filters such as `--type review` return consistent results across normal and chunk search.
+
 ## [2.0.0-beta.1] — 2026-07-21
 
 ### Product Direction

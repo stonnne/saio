@@ -618,7 +618,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # --- backup ---
     p_backup = sub.add_parser(
-        "backup", help="Incremental backup with rsync", description="Incremental backup with rsync"
+        "backup", help="Backup and restore with rsync", description="Backup and restore with rsync"
     )
     p_backup.set_defaults(func=cmd_backup)
     p_backup_sub = p_backup.add_subparsers(dest="backup_action", required=True)
@@ -629,6 +629,23 @@ def _build_parser() -> argparse.ArgumentParser:
     p_backup_run = p_backup_sub.add_parser("run", help="Run a configured backup target")
     p_backup_run.add_argument("target", help="Backup target name from config backup.targets")
     p_backup_run.add_argument("--dry-run", action="store_true", help="Preview rsync actions without transferring files")
+
+    p_backup_restore = p_backup_sub.add_parser("restore", help="Restore a full instance backup")
+    p_backup_restore.add_argument("target", help="Instance backup target name from config backup.targets")
+    p_backup_restore.add_argument(
+        "--destination",
+        help="Runtime-instance directory to restore into (default: current instance root)",
+    )
+    p_backup_restore.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview restore actions without transferring files",
+    )
+    p_backup_restore.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow merging into a non-empty destination and overwriting matching files",
+    )
 
     # --- fsearch ---
     p_fsearch = sub.add_parser(

@@ -44,6 +44,7 @@ VALID_PDF_CLOUD_MODEL_VERSIONS = {"pipeline", "vlm"}
 VALID_MINERU_PARSE_METHODS = {"auto", "txt", "ocr"}
 VALID_PDF_PREFERRED_PARSERS = {"mineru", "docling", "pymupdf"}
 VALID_BACKUP_MODES = {"default", "append", "append-verify"}
+VALID_BACKUP_SCOPES = {"data", "instance"}
 
 # ============================================================================
 #  Config dataclasses
@@ -364,6 +365,8 @@ class BackupTargetConfig:
         port: SSH port.
         identity_file: Optional SSH identity file path.
         password: Optional SSH password for non-interactive backup flows.
+        scope: Backup scope, ``"data"`` for the configured source directory or
+            ``"instance"`` for restorable runtime-instance state.
         mode: Transfer mode, ``"default"`` | ``"append"`` | ``"append-verify"``.
         compress: Whether to enable rsync compression.
         enabled: Whether the target is available for use.
@@ -376,6 +379,7 @@ class BackupTargetConfig:
     port: int = 22
     identity_file: str = ""
     password: str = ""
+    scope: str = "data"
     mode: str = "default"
     compress: bool = True
     enabled: bool = True
@@ -390,12 +394,18 @@ class BackupConfig:
         source_dir: Local directory to sync, relative to config root by default.
         rsync_bin: Rsync executable name or absolute path.
         ssh_bin: SSH executable name or absolute path.
+        connect_timeout_seconds: SSH connection timeout.
+        io_timeout_seconds: Maximum rsync I/O idle interval.
+        process_timeout_seconds: Overall subprocess deadline.
         targets: Named remote backup targets.
     """
 
     source_dir: str = "data"
     rsync_bin: str = "rsync"
     ssh_bin: str = "ssh"
+    connect_timeout_seconds: int = 15
+    io_timeout_seconds: int = 300
+    process_timeout_seconds: int = 86_400
     targets: dict[str, BackupTargetConfig] = field(default_factory=dict)
 
 
@@ -1209,6 +1219,12 @@ def _build_config(data: dict, root: Path) -> Config:
                 ),
                 identity_file=str(target_data.get("identity_file") or "").strip(),
                 password=str(target_data.get("password") or "").strip(),
+                scope=_normalize_choice(
+                    target_data.get("scope", "data"),
+                    default="data",
+                    valid=VALID_BACKUP_SCOPES,
+                    field_name=f"backup.targets.{name}.scope",
+                ),
                 mode=_normalize_choice(
                     target_data.get("mode", "default"),
                     default="default",
@@ -1224,6 +1240,21 @@ def _build_config(data: dict, root: Path) -> Config:
         source_dir=str(backup_data.get("source_dir") or "data").strip() or "data",
         rsync_bin=str(backup_data.get("rsync_bin") or "rsync").strip() or "rsync",
         ssh_bin=str(backup_data.get("ssh_bin") or "ssh").strip() or "ssh",
+        connect_timeout_seconds=_normalize_positive_int(
+            backup_data.get("connect_timeout_seconds"),
+            default=15,
+            field_name="backup.connect_timeout_seconds",
+        ),
+        io_timeout_seconds=_normalize_positive_int(
+            backup_data.get("io_timeout_seconds"),
+            default=300,
+            field_name="backup.io_timeout_seconds",
+        ),
+        process_timeout_seconds=_normalize_positive_int(
+            backup_data.get("process_timeout_seconds"),
+            default=86_400,
+            field_name="backup.process_timeout_seconds",
+        ),
         targets=targets,
     )
 

@@ -68,12 +68,23 @@ embed:
 
 ### Backup Targets
 
-ScholarAIO can sync its `data/` directory to a remote machine through `rsync`.
-`scholaraio backup run` always invokes SSH in batch mode (`-o BatchMode=yes`), so password prompts and host-key confirmation prompts are intentionally disabled.
+ScholarAIO supports two rsync backup scopes:
+
+- `data` preserves the existing behavior and syncs only `backup.source_dir`.
+- `instance` creates a restorable runtime-instance backup containing `config.yaml`,
+  `config.local.yaml` when present, the configured data root, `workspace/`,
+  `published/`, and `.scholaraio-control/`.
+
+SSH is always non-interactive. Key-authenticated targets use `BatchMode=yes`;
+password targets use ScholarAIO's internal `SSH_ASKPASS` helper. Host-key
+confirmation is never interactive.
 
 ```yaml
 backup:
   source_dir: data
+  connect_timeout_seconds: 15
+  io_timeout_seconds: 300
+  process_timeout_seconds: 86400
   targets:
     lab:
       host: backup.example.com
@@ -81,20 +92,24 @@ backup:
       path: /srv/scholaraio
       port: 22
       identity_file: ~/.ssh/id_ed25519
+      scope: instance
       mode: default
       compress: true
       enabled: true
-      exclude:
-        - "*.tmp"
-        - "metrics.db"
 ```
 
+- `scope` supports `data` and `instance`; it defaults to `data` for backward compatibility.
+- `connect_timeout_seconds` bounds SSH connection setup, `io_timeout_seconds` bounds idle rsync I/O and SSH keepalive detection, and `process_timeout_seconds` bounds each rsync/SSH subprocess.
 - `mode` supports `default`, `append`, and `append-verify`.
 - Use `default` for the full ScholarAIO `data/` tree, especially when it includes mutable files such as SQLite databases.
-
 - Reserve `append` / `append-verify` for append-only artifacts where the remote copy is expected to be a prefix of the local file.
+- `instance` requires `mode: default`, does not accept `exclude`, and should use a dedicated empty remote directory.
+- Subsequent `instance` runs mirror deletions inside the backed-up component trees, preventing removed papers or metadata from reappearing after restore.
+- Real `instance` runs use SQLite's online backup API plus `quick_check` for recognized `.db`, `.sqlite`, and `.sqlite3` files. WAL/SHM/journal sidecars are not restored; each database snapshot is consistent even if a writer remains active.
 - Keep host-specific secrets such as `identity_file` in `config.local.yaml` when possible.
 - Prepare SSH key-based authentication and the target host's `known_hosts` entry ahead of time; otherwise `backup run` will fail fast instead of waiting for interactive input.
+- `config.local.yaml` is sent through encrypted SSH and keeps owner-only file permissions, but its API keys and passwords remain plaintext at rest on the backup server. Protect the remote account and storage accordingly.
+- API keys supplied only through environment variables are not captured. Put a key in `config.local.yaml` if it must be restorable.
 
 Recommended split:
 
@@ -108,6 +123,7 @@ backup:
       user: lzmo
       path: /srv/scholaraio
       port: 1393
+      scope: instance
       mode: default
       compress: true
       enabled: true
@@ -131,6 +147,26 @@ Recommended first-run checklist:
 3. If the server is password-only, place `password` in `config.local.yaml`; ScholarAIO will switch to internal non-interactive askpass mode automatically.
 4. Dry-run first:
    `scholaraio backup run lab --dry-run`
+5. Run the backup:
+   `scholaraio backup run lab`
+
+Restore into a new runtime-instance directory:
+
+```bash
+scholaraio backup restore lab --destination /path/to/new/scholaraio --dry-run
+scholaraio backup restore lab --destination /path/to/new/scholaraio
+```
+
+The destination must be empty unless `--force` is supplied. `--force` merges the
+backup into the destination and overwrites matching runtime files; it does not
+delete unrelated source-code files. Restore first reads and validates the remote
+backup manifest, and data-only targets cannot be restored as full instances.
+
+On a replacement machine, create a minimal local target configuration first so
+ScholarAIO knows how to reach the backup server. The restored
+`config.local.yaml` then replaces that bootstrap configuration. After moving an
+instance to a different root, run `scholaraio setup check` and rebuild
+path-sensitive indexes.
 
 ### Rendered Web Extraction
 

@@ -9,7 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
-from scholaraio.stores.papers import iter_paper_dirs, parse_year_range, read_meta
+from scholaraio.stores.papers import iter_paper_dirs, normalize_paper_type, parse_year_range, read_meta
 
 
 @dataclass(frozen=True)
@@ -88,7 +88,7 @@ def iter_paper_chunks(paper_dir: Path, *, target_chars: int = 4800, meta: dict |
     title = meta.get("title") or paper_dir.name
     year = str(meta.get("year") or "")
     journal = str(meta.get("journal") or "")
-    paper_type = str(meta.get("paper_type") or "")
+    paper_type = normalize_paper_type(meta.get("paper_type"))
     sections = _sections_from_toc(meta, lines) or _sections_from_headings(title, lines)
 
     chunks: list[PaperChunk] = []

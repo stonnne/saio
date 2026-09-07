@@ -541,7 +541,7 @@ This journal SHOULD record:
 Important:
 
 - this journal is required even if the user already uses `scholaraio backup`
-- current backup defaults to syncing `data/` only and is not a full migration safety net for `workspace/` plus config
+- backup still defaults to `scope: data`; opt-in `scope: instance` adds config/workspace recovery, but migration journals and verification remain separate requirements
 
 ### Step 4. Whole-Tree Move/Copy for Category A and B
 

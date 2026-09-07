@@ -39,6 +39,17 @@ def test_release_version_is_2_0_0():
     assert __version__ == "2.0.0"
 
 
+def test_release_distribution_is_marked_stable():
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+
+    development_statuses = {
+        classifier for classifier in data["project"]["classifiers"] if classifier.startswith("Development Status ::")
+    }
+
+    assert development_statuses == {"Development Status :: 5 - Production/Stable"}
+
+
 def test_plugin_versions_match_release_version():
     root = Path(__file__).resolve().parents[1]
     plugin = json.loads((root / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
