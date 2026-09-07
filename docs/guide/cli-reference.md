@@ -50,6 +50,12 @@ scholaraio top-cited
 - `vsearch` performs semantic vector search.
 - `usearch` performs fused keyword + semantic retrieval.
 - `fsearch` searches across the main library, proceedings, explore databases, and arXiv.
+
+After adding, changing, or removing papers, run `scholaraio index`,
+`scholaraio index --chunks`, and `scholaraio embed` to refresh each search surface.
+Incremental keyword and vector refreshes remove deleted records; unchanged
+papers keep their vectors without an embedding API call. A missing library root
+is an error, and unreadable metadata suppresses deletion cleanup for that run.
 - `show` supports layered reading from metadata to full text.
 
 ## Ingest And Enrich

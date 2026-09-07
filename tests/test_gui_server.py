@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import socket
 import subprocess
 import threading
 from contextlib import contextmanager, nullcontext, suppress
@@ -2396,7 +2397,8 @@ def test_library_view_native_open_validates_request_schema(
     open_default.assert_not_called()
 
 
-def test_library_view_native_open_rejects_oversized_json(tmp_path):
+@pytest.mark.parametrize("body_size", [70 * 1024, 256 * 1024])
+def test_library_view_native_open_rejects_oversized_json(tmp_path, body_size):
     cfg, _main_dir, _child_dir = _write_gui_action_fixtures(tmp_path)
 
     with _running_library_server(cfg) as (_server, base_url):
@@ -2404,7 +2406,7 @@ def test_library_view_native_open_rejects_oversized_json(tmp_path):
         request = Request(
             f"{base_url}/api/main/open-pdf",
             method="POST",
-            data=b"{" + b"x" * (70 * 1024) + b"}",
+            data=b"{" + b"x" * body_size + b"}",
             headers={
                 "Content-Type": "application/json",
                 "X-ScholarAIO-CSRF": capabilities["csrf_token"],
@@ -2417,6 +2419,26 @@ def test_library_view_native_open_rejects_oversized_json(tmp_path):
 
     assert caught.value.code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
     assert payload["code"] == "request_too_large"
+
+
+def test_library_view_rejects_oversized_body_without_waiting_for_upload(tmp_path):
+    cfg, _main_dir, _child_dir = _write_gui_action_fixtures(tmp_path)
+    with _running_library_server(cfg) as (server, base_url):
+        capabilities, _headers = _json_response(f"{base_url}/api/capabilities")
+        with socket.create_connection(server.server_address, timeout=2) as client:
+            request = (
+                "POST /api/main/open-pdf HTTP/1.1\r\n"
+                f"Host: {server.server_address[0]}:{server.server_address[1]}\r\n"
+                "Content-Type: application/json\r\nContent-Length: 1000000000\r\n"
+                f"X-ScholarAIO-CSRF: {capabilities['csrf_token']}\r\nOrigin: {base_url}\r\n\r\n"
+            )
+            client.sendall(request.encode())
+            response = bytearray()
+            while data := client.recv(4096):
+                response.extend(data)
+            headers, body = bytes(response).split(b"\r\n\r\n", 1)
+            assert b"413" in headers.split(b"\r\n", 1)[0]
+            assert json.loads(body)["code"] == "request_too_large"
 
 
 @pytest.mark.parametrize(

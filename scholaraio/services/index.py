@@ -160,6 +160,8 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
     from scholaraio.stores.papers import iter_paper_dirs
     from scholaraio.stores.papers import read_meta as _read_meta
 
+    if not papers_dir.is_dir():
+        raise FileNotFoundError(f"Papers directory does not exist: {papers_dir}")
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("PRAGMA journal_mode=WAL")
@@ -221,12 +223,16 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
                 existing_hashes[row[0]] = row[1]
 
         count = 0
+        seen_ids: set[str] = set()
+        scan_complete = True
         for pdir in iter_paper_dirs(papers_dir):
             try:
                 meta = _read_meta(pdir)
             except (ValueError, FileNotFoundError):
+                scan_complete = False
                 continue
             paper_id = meta.get("id") or pdir.name
+            seen_ids.add(paper_id)
             h = _index_hash(meta)
             if not rebuild and existing_hashes.get(paper_id) == h:
                 continue  # unchanged, skip
@@ -333,14 +339,28 @@ def build_index(papers_dir: Path, db_path: Path, rebuild: bool = False) -> int:
 
             # Insert references into citations table
             refs = _reference_dois(meta.get("references") or [])
+            conn.execute("DELETE FROM citations WHERE source_id = ?", (paper_id,))
             if refs:
-                conn.execute("DELETE FROM citations WHERE source_id = ?", (paper_id,))
                 conn.executemany(
                     "INSERT OR IGNORE INTO citations (source_id, target_doi, target_id) VALUES (?, ?, NULL)",
                     [(paper_id, doi) for doi in refs],
                 )
 
             count += 1
+
+        if scan_complete:
+            indexed_ids = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT paper_id FROM papers UNION SELECT paper_id FROM papers_hash UNION SELECT id FROM papers_registry"
+                )
+            }
+            for paper_id in indexed_ids - seen_ids:
+                conn.execute("DELETE FROM papers WHERE paper_id = ?", (paper_id,))
+                conn.execute("DELETE FROM papers_hash WHERE paper_id = ?", (paper_id,))
+                conn.execute("DELETE FROM papers_registry WHERE id = ?", (paper_id,))
+                conn.execute("DELETE FROM citations WHERE source_id = ?", (paper_id,))
+                conn.execute("UPDATE citations SET target_id = NULL WHERE target_id = ?", (paper_id,))
 
         # Bulk resolve target_id for citations where target paper is in library
         conn.execute("""

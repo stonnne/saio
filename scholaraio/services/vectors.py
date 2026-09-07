@@ -885,6 +885,8 @@ def build_vectors(papers_dir: Path, db_path: Path, rebuild: bool = False, cfg: C
     Returns:
         本次新写入的向量数量。
     """
+    if not papers_dir.is_dir():
+        raise FileNotFoundError(f"Papers directory does not exist: {papers_dir}")
     conn = sqlite3.connect(db_path)
     try:
         _ensure_schema(conn)
@@ -919,13 +921,17 @@ def build_vectors(papers_dir: Path, db_path: Path, rebuild: bool = False, cfg: C
         from scholaraio.stores.papers import iter_paper_dirs, read_meta
 
         to_embed: list[tuple[str, str, str]] = []  # (paper_id, text, hash)
+        seen_ids: set[str] = set()
+        scan_complete = True
         for pdir in iter_paper_dirs(papers_dir):
             try:
                 meta = read_meta(pdir)
             except (ValueError, FileNotFoundError) as e:
                 _log.debug("failed to read meta.json in %s: %s", pdir.name, e)
+                scan_complete = False
                 continue
             paper_id = meta.get("id") or pdir.name
+            seen_ids.add(paper_id)
 
             title = (meta.get("title") or "").strip()
             abstract = (meta.get("abstract") or "").strip()
@@ -943,13 +949,15 @@ def build_vectors(papers_dir: Path, db_path: Path, rebuild: bool = False, cfg: C
             text = "\n\n".join(parts)
             to_embed.append((paper_id, text, h))
 
-        if not to_embed:
-            conn.commit()
-            return 0
+        removed_ids = set(existing_hashes) - seen_ids if scan_complete else set()
+        for paper_id in removed_ids:
+            conn.execute("DELETE FROM paper_vectors WHERE paper_id = ?", (paper_id,))
 
-        _log.info("embedding %d papers", len(to_embed))
-        texts = [t for _, t, _ in to_embed]
-        vecs = _embed_batch(texts, cfg)
+        vecs = []
+        if to_embed:
+            _log.info("embedding %d papers", len(to_embed))
+            texts = [t for _, t, _ in to_embed]
+            vecs = _embed_batch(texts, cfg)
 
         new_ids = []
         new_vecs_raw = []
@@ -969,13 +977,12 @@ def build_vectors(papers_dir: Path, db_path: Path, rebuild: bool = False, cfg: C
     finally:
         conn.close()
 
-    if to_embed:
-        if updated_ids:
-            # Content changed for existing papers — must rebuild FAISS
-            _invalidate_faiss(db_path)
-        else:
-            # Pure additions — try incremental append
-            _append_faiss(db_path, new_ids, new_vecs_raw)
+    if removed_ids or updated_ids:
+        # Deletions and content changes invalidate the cached ID/vector order.
+        _invalidate_faiss(db_path)
+    elif to_embed:
+        # Pure additions — try incremental append
+        _append_faiss(db_path, new_ids, new_vecs_raw)
 
     return len(to_embed)
 

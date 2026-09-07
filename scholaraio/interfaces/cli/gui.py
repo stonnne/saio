@@ -8,8 +8,10 @@ import json
 import mimetypes
 import secrets
 import shutil
+import socket
 import sqlite3
 import threading
+import time
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -227,6 +229,25 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
                 code="request_too_large",
                 headers={"Connection": "close"},
             )
+            # Closing a TCP socket with unread input can reset the connection
+            # before the client receives the JSON error. Send EOF first, then
+            # discard a bounded amount of input without waiting on a slow peer.
+            self.wfile.flush()
+            self.connection.shutdown(socket.SHUT_WR)
+            deadline = time.monotonic() + 0.25
+            remaining = min(content_length, 1024 * 1024)
+            try:
+                while remaining > 0:
+                    timeout = deadline - time.monotonic()
+                    if timeout <= 0:
+                        break
+                    self.connection.settimeout(timeout)
+                    chunk = self.rfile.read1(min(remaining, 64 * 1024))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+            except OSError:
+                pass
             return None
         try:
             payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
