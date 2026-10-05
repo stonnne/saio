@@ -8,46 +8,29 @@ import logging
 import sys
 from pathlib import Path
 
+import scholaraio.interfaces.cli.paper as _dep_paper
+
 
 def _ui(msg: str = "") -> None:
-    try:
-        from scholaraio.interfaces.cli import compat as cli_mod
-    except ImportError:
-        from scholaraio.core.log import ui as log_ui
+    from scholaraio.core import log
 
-        log_ui(msg)
-        return
-    cli_mod.ui(msg)
+    log.ui(msg)
 
 
 def _log_debug(msg: str, *args) -> None:
-    try:
-        from scholaraio.interfaces.cli import compat as cli_mod
-    except ImportError:
-        logging.getLogger(__name__).debug(msg, *args)
-        return
-    cli_mod._log.debug(msg, *args)
+    logging.getLogger(__name__).debug(msg, *args)
 
 
 def _log_error(msg: str, *args) -> None:
-    try:
-        from scholaraio.interfaces.cli import compat as cli_mod
-    except ImportError:
-        logging.getLogger(__name__).error(msg, *args)
-        return
-    cli_mod._log.error(msg, *args)
+    logging.getLogger(__name__).error(msg, *args)
 
 
 def _lookup_registry_by_candidates(cfg, *candidates: object) -> dict | None:
-    from scholaraio.interfaces.cli import compat as cli_mod
-
-    return cli_mod._lookup_registry_by_candidates(cfg, *candidates)
+    return _dep_paper._lookup_registry_by_candidates(cfg, *candidates)
 
 
 def _resolve_paper(paper_id: str, cfg) -> Path:
-    from scholaraio.interfaces.cli import compat as cli_mod
-
-    return cli_mod._resolve_paper(paper_id, cfg)
+    return _dep_paper._resolve_paper(paper_id, cfg)
 
 
 def cmd_repair(args: argparse.Namespace, cfg) -> None:
@@ -271,6 +254,6 @@ def cmd_repair(args: argparse.Namespace, cfg) -> None:
     _ui(f"  Wrote: {json_path.name}")
 
     new_stem = generate_new_stem(meta)
-    rename_files(md_path, json_path, new_stem, dry_run=False)
+    rename_files(md_path, json_path, new_stem, dry_run=False, db_path=cfg.index_db)
 
     _log_debug("done. consider running pipeline reindex")

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import ipaddress
 import json
+import logging
 import mimetypes
+import os
+import re
 import secrets
-import shutil
 import socket
 import sqlite3
 import threading
@@ -19,12 +22,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
+from scholaraio.services.library_catalog import LibraryCatalog
+
 if TYPE_CHECKING:
     from scholaraio.core.config import Config
     from scholaraio.services.pdf_edit_mirror import PdfEditMirrorService
 
+_LOG = logging.getLogger(__name__)
+
 _MAX_JSON_BODY_BYTES = 64 * 1024
 _NATIVE_PDF_OPEN_PATHS = frozenset({"/api/main/open-pdf", "/api/proceedings/open-pdf"})
+_PDF_RECOVERY_WRITE_PATHS = frozenset({"/api/main/resolve-pdf", "/api/proceedings/resolve-pdf"})
 _CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
     "connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
@@ -37,14 +45,9 @@ _SECURITY_HEADERS = {
 
 
 def _ui(msg: str = "") -> None:
-    try:
-        from scholaraio.interfaces.cli import compat as cli_mod
-    except ImportError:
-        from scholaraio.core.log import ui as log_ui
+    from scholaraio.core import log
 
-        log_ui(msg)
-        return
-    cli_mod.ui(msg)
+    log.ui(msg)
 
 
 def _static_dir() -> Path:
@@ -52,7 +55,7 @@ def _static_dir() -> Path:
 
 
 def _json_bytes(payload: object) -> bytes:
-    return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
 def _pdf_content_disposition(filename: str, *, attachment: bool = False) -> str:
@@ -94,6 +97,7 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
     """Request handler configured by :func:`create_library_view_server`."""
 
     cfg: Config
+    catalogs: dict[str, LibraryCatalog]
     static_dir: Path
     csrf_token: str
     native_pdf_open_enabled: bool
@@ -132,14 +136,17 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
         content_type: str,
         *,
         headers: dict[str, str] | None = None,
+        allow_same_origin_frame: bool = False,
     ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self._send_security_headers()
+        if status != HTTPStatus.NOT_MODIFIED:
+            self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", (headers or {}).get("Cache-Control", "no-store"))
+        self._send_security_headers(allow_same_origin_frame=allow_same_origin_frame)
         for name, value in (headers or {}).items():
-            self.send_header(name, value)
+            if name.lower() != "cache-control":
+                self.send_header(name, value)
         self.end_headers()
         if self.command != "HEAD":
             self.wfile.write(body)
@@ -267,9 +274,55 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
             return None
         return payload
 
+    def _send_catalog_page(self, source: str) -> None:
+        params = {
+            key: self._query_value(key)
+            for key in (
+                "offset",
+                "limit",
+                "sort",
+                "direction",
+                "revision",
+                "q",
+                "title",
+                "author",
+                "journal",
+                "doi",
+                "paper_type",
+                "volume",
+                "year_from",
+                "year_to",
+                "ids",
+                "refresh",
+            )
+            if self._query_value(key)
+        }
+        try:
+            payload = self.catalogs[source].page(params)
+        except (ValueError, TypeError) as exc:
+            self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc), code="invalid_page_query")
+            return
+        self._send_library(payload)
+
+    def _send_library(self, payload: dict) -> None:
+        # generated_at describes response generation, not a library mutation.
+        version = {key: value for key, value in payload.items() if key != "generated_at"}
+        if version.get("audit"):
+            version["audit"] = {"state": version["audit"].get("state", "")}
+        etag = '"' + hashlib.sha256(_json_bytes(version)).hexdigest() + '"'
+        headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
+        if self._etag_matches(etag):
+            self._send_bytes(HTTPStatus.NOT_MODIFIED, b"", "application/json", headers=headers)
+        else:
+            self._send_json(HTTPStatus.OK, payload, headers=headers)
+
+    def _etag_matches(self, etag: str) -> bool:
+        values = [value.strip() for value in self.headers.get("If-None-Match", "").split(",")]
+        return "*" in values or any(value.removeprefix("W/") == etag for value in values)
+
     def _send_pdf(self, pdf_path: Path, *, attachment: bool = False) -> None:
         try:
-            size = pdf_path.stat().st_size
+            pdf_path.stat()
             stream = pdf_path.open("rb")
         except FileNotFoundError:
             self._send_error_json(HTTPStatus.NOT_FOUND, "PDF file not found")
@@ -278,22 +331,64 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
             self._send_error_json(HTTPStatus.INTERNAL_SERVER_ERROR, str(exc))
             return
 
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/pdf")
-        self.send_header("Content-Length", str(size))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header(
-            "Content-Disposition",
-            _pdf_content_disposition(pdf_path.name, attachment=attachment),
-        )
-        self._send_security_headers(allow_same_origin_frame=True)
-        self.end_headers()
-        if self.command == "HEAD":
-            stream.close()
-            return
         with stream:
+            stat = os.fstat(stream.fileno())
+            size = stat.st_size
+            etag = f'"{stat.st_dev:x}-{stat.st_ino:x}-{stat.st_size:x}-{stat.st_mtime_ns:x}-{stat.st_ctime_ns:x}"'
+            headers = {"ETag": etag, "Cache-Control": "private, no-cache", "Accept-Ranges": "bytes"}
+            if self._etag_matches(etag):
+                self._send_bytes(
+                    HTTPStatus.NOT_MODIFIED, b"", "application/pdf", headers=headers, allow_same_origin_frame=True
+                )
+                return
+            start, end = 0, size - 1
+            status = HTTPStatus.OK
+            requested = self.headers.get("Range", "") if self.command != "HEAD" else ""
+            if requested and self.headers.get("If-Range", etag) == etag:
+                match = re.fullmatch(r"bytes=(\d*)-(\d*)", requested.strip())
+                # Ignore unsupported units/multipart ranges; browsers use a single range.
+                if match and any(match.groups()):
+                    first, last = match.groups()
+                    try:
+                        if first:
+                            start = int(first)
+                            end = min(int(last), size - 1) if last else size - 1
+                        else:
+                            suffix = int(last)
+                            start = max(0, size - suffix)
+                        valid = 0 <= start <= end < size
+                    except ValueError:
+                        valid = False
+                    if not valid:
+                        self._send_bytes(
+                            HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+                            b"",
+                            "application/pdf",
+                            headers={**headers, "Content-Range": f"bytes */{size}"},
+                        )
+                        return
+                    status = HTTPStatus.PARTIAL_CONTENT
+                    headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+
+            self.send_response(status)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", str(max(0, end - start + 1)))
+            self.send_header("Content-Disposition", _pdf_content_disposition(pdf_path.name, attachment=attachment))
+            for name, value in headers.items():
+                self.send_header(name, value)
+            self._send_security_headers(allow_same_origin_frame=True)
+            self.end_headers()
+            if self.command == "HEAD":
+                return
             try:
-                shutil.copyfileobj(stream, self.wfile, length=1024 * 1024)
+                stream.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = stream.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
             except OSError:
                 return
 
@@ -359,7 +454,10 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
             if path == "/api/main/papers":
-                self._send_json(HTTPStatus.OK, build_main_library_view(self.cfg))
+                if self._query_value("limit"):
+                    self._send_catalog_page("main")
+                else:
+                    self._send_library(build_main_library_view(self.cfg, background_audit=True))
                 return
             if path == "/api/main/search":
                 try:
@@ -392,7 +490,7 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
                 paper_id = self._required_query_id()
                 if paper_id is None:
                     return
-                detail = get_main_paper_detail(self.cfg, paper_id)
+                detail = get_main_paper_detail(self.cfg, paper_id, background_audit=True)
                 detail["pdf_sync"] = pdf_sync_status("main", paper_id, validate_paper=False)
                 self._send_json(HTTPStatus.OK, detail)
                 return
@@ -421,7 +519,10 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
             if path == "/api/proceedings/papers":
-                self._send_json(HTTPStatus.OK, build_proceedings_library_view(self.cfg))
+                if self._query_value("limit"):
+                    self._send_catalog_page("proceedings")
+                else:
+                    self._send_library(build_proceedings_library_view(self.cfg))
                 return
             if path == "/api/proceedings/detail":
                 paper_id = self._required_query_id()
@@ -496,7 +597,10 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlparse(self.path).path
-        if path in _NATIVE_PDF_OPEN_PATHS:
+        if path in {"/api/main/pdf-recovery", "/api/proceedings/pdf-recovery"}:
+            self._handle_pdf_recovery(path.split("/")[2])
+            return
+        if path in (_NATIVE_PDF_OPEN_PATHS | _PDF_RECOVERY_WRITE_PATHS):
             self._reject_write(allowed="POST")
             return
         if path.startswith("/api/"):
@@ -509,7 +613,7 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
 
     def _reject_write(self, *, allowed: str | None = None) -> None:
         path = urlparse(getattr(self, "path", "")).path
-        allowed = allowed or ("POST" if path in _NATIVE_PDF_OPEN_PATHS else "GET, HEAD")
+        allowed = allowed or ("POST" if path in (_NATIVE_PDF_OPEN_PATHS | _PDF_RECOVERY_WRITE_PATHS) else "GET, HEAD")
         self.close_connection = True
         self._send_error_json(
             HTTPStatus.METHOD_NOT_ALLOWED,
@@ -565,22 +669,36 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        started = time.perf_counter()
+        timings = {}
         try:
             if source == "main":
                 pdf_path = get_main_paper_pdf(self.cfg, paper_id)
             else:
                 pdf_path = get_proceedings_paper_pdf(self.cfg, paper_id)
+            timings["lookup"] = (time.perf_counter() - started) * 1000
+            stage_started = time.perf_counter()
             if self.pdf_edit_mirror_service is not None:
                 resolution = resolve_pdf_edit_mirror_target(self.cfg, source, paper_id)
                 if resolution.target is None:
                     raise LibraryPaperNotFoundError(paper_id)
                 prepared = self.pdf_edit_mirror_service.prepare_for_open(resolution.target)
+                if prepared.status.get("state") == "conflict":
+                    self._send_error_json(
+                        HTTPStatus.CONFLICT,
+                        str(prepared.status["message"]),
+                        code="pdf_sync_conflict",
+                    )
+                    return
                 if not prepared.launchable:
                     message = str(prepared.status.get("message") or "A safe synchronized PDF mirror is unavailable")
                     raise DefaultApplicationOpenError(message)
+                timings["prepare"] = (time.perf_counter() - stage_started) * 1000
+                stage_started = time.perf_counter()
                 open_wsl_windows_file(prepared.mirror_path)
             else:
                 open_with_default_application(pdf_path.resolve())
+            timings["launch"] = (time.perf_counter() - stage_started) * 1000
         except LibraryPaperNotFoundError:
             self._send_error_json(
                 HTTPStatus.NOT_FOUND,
@@ -602,10 +720,91 @@ class LibraryViewRequestHandler(BaseHTTPRequestHandler):
                 code="native_open_failed",
             )
             return
-        self._send_json(HTTPStatus.OK, {"status": "opened", "paper_id": paper_id})
+        except (OSError, sqlite3.Error) as exc:
+            _LOG.warning("PDF native-open failed (%s)", type(exc).__name__)
+            self._send_error_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "PDF preparation failed; retry after any active save completes",
+                code="native_open_failed",
+            )
+            return
+        _LOG.info("PDF native-open stages_ms=%s", {key: round(value, 1) for key, value in timings.items()})
+        self._send_json(
+            HTTPStatus.OK,
+            {"status": "opened", "paper_id": paper_id},
+            headers={"Server-Timing": ", ".join(f"{key};dur={value:.1f}" for key, value in timings.items())},
+        )
+
+    def _handle_pdf_recovery(self, source: str, *, write: bool = False) -> None:
+        from scholaraio.services.library_view import resolve_pdf_edit_mirror_target
+        from scholaraio.services.pdf_conflicts import (
+            PdfConflictChanged,
+            export_version,
+            inspect_conflict,
+            resolve_conflict,
+        )
+
+        def resolver(current):
+            return resolve_pdf_edit_mirror_target(self.cfg, current.library_kind, current.paper_id, record=current)
+
+        service = self.pdf_edit_mirror_service
+        if service is None or not self.native_pdf_open_enabled:
+            self._send_error_json(HTTPStatus.FORBIDDEN, "PDF recovery is unavailable", code="recovery_disabled")
+            return
+        if write:
+            token = str(self.headers.get("X-ScholarAIO-CSRF") or "")
+            if not self._origin_is_same_loopback_server() or not secrets.compare_digest(token, self.csrf_token):
+                self._send_error_json(
+                    HTTPStatus.FORBIDDEN, "Recovery requires same-origin CSRF authorization", code="csrf_rejected"
+                )
+                return
+            payload = self._read_json_object()
+            if payload is None:
+                return
+        else:
+            payload = {key: self._query_value(key) for key in ("id", "version", "token", "download")}
+        try:
+            for key in ("id", "version", "token"):
+                if key in payload and not isinstance(payload[key], str):
+                    raise ValueError(f"{key} must be a string")
+            record = service.store.get_by_paper(source, payload.get("id", ""))
+            if record is None:
+                raise KeyError("No editable mirror exists for this paper")
+            if write:
+                if payload.get("readers_closed") is not True:
+                    raise ValueError("Close PDF readers before resolving and confirm readers_closed")
+                result = resolve_conflict(
+                    service.reconciler,
+                    record.sync_id,
+                    token=payload.get("token", ""),
+                    version=payload.get("version", ""),
+                    resolver=resolver,
+                )
+                self._send_json(HTTPStatus.OK, result)
+            elif payload.get("version"):
+                with export_version(
+                    service.reconciler,
+                    record.sync_id,
+                    payload["version"],
+                    payload.get("token", ""),
+                    resolver=resolver,
+                    preview=payload.get("download") != "1",
+                ) as pdf:
+                    self._send_pdf(pdf, attachment=payload.get("download") == "1")
+            else:
+                self._send_json(HTTPStatus.OK, inspect_conflict(service.reconciler, record.sync_id, resolver=resolver))
+        except PdfConflictChanged as exc:
+            self._send_error_json(HTTPStatus.CONFLICT, str(exc), code="pdf_versions_changed")
+        except KeyError as exc:
+            self._send_error_json(HTTPStatus.NOT_FOUND, str(exc), code="pdf_version_not_found")
+        except (ValueError, OSError, TimeoutError) as exc:
+            self._send_error_json(HTTPStatus.BAD_REQUEST, str(exc), code="pdf_recovery_failed")
 
     def do_POST(self) -> None:
         path = urlparse(getattr(self, "path", "")).path
+        if path in _PDF_RECOVERY_WRITE_PATHS:
+            self._handle_pdf_recovery(path.split("/")[2], write=True)
+            return
         if path == "/api/main/open-pdf":
             self._handle_native_pdf_open("main")
             return
@@ -646,6 +845,8 @@ class LibraryViewHTTPServer(ThreadingHTTPServer):
                 service.stop()
         finally:
             super().server_close()
+            for catalog in getattr(self.RequestHandlerClass, "catalogs", {}).values():
+                catalog.close()
 
 
 def create_library_view_server(cfg: Config, *, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
@@ -660,6 +861,9 @@ def create_library_view_server(cfg: Config, *, host: str = "127.0.0.1", port: in
     class ConfiguredHandler(LibraryViewRequestHandler):
         pass
 
+    from scholaraio.services.library_catalog import LibraryCatalog
+
+    ConfiguredHandler.catalogs = {source: LibraryCatalog(cfg, source) for source in ("main", "proceedings")}
     ConfiguredHandler.cfg = cfg
     ConfiguredHandler.static_dir = static_dir
     ConfiguredHandler.csrf_token = secrets.token_urlsafe(32)

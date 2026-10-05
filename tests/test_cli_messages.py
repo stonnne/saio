@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -13,6 +14,11 @@ from types import SimpleNamespace
 
 import pytest
 
+import scholaraio.core.log as target_log
+import scholaraio.interfaces.cli.fsearch as target_fsearch
+import scholaraio.interfaces.cli.paper as target_paper
+import scholaraio.interfaces.cli.paths as target_paths
+import scholaraio.interfaces.cli.search_metrics as target_search_metrics
 from scholaraio.core.config import _build_config
 from scholaraio.interfaces.cli import compat as cli
 from scholaraio.providers.mineru import ConvertResult, PDFValidationResult
@@ -315,93 +321,6 @@ class TestCliHelpLocalization:
         assert "workspace/_system/translation-bundles/" in translate_help
         assert "workspace/translation-ws/" not in translate_help
 
-    def test_paper2any_help_exposes_lightweight_mcp_sidecar(self):
-        parser = cli._build_parser()
-        paper2any_parser = parser._subparsers._group_actions[0].choices["paper2any"]
-        actions = paper2any_parser._subparsers._group_actions[0].choices
-
-        serve_help = actions["mcp-serve"].format_help()
-        backend_help = actions["backend-serve"].format_help()
-        setup_help = actions["setup"].format_help()
-        call_help = actions["call"].format_help()
-
-        assert "Prepare the external Paper2Any runtime extension" in setup_help
-        assert "--install-runtime" in setup_help
-        assert "Start the lightweight Paper2Any MCP sidecar" in serve_help
-        assert "--paper2any-root" in serve_help
-        assert "--backend-url" in serve_help
-        assert "Start the real upstream Paper2Any FastAPI backend" in backend_help
-        assert "--backend-api-key" in backend_help
-        assert "Call a Paper2Any MCP tool" in call_help
-        assert "setup" in actions
-        assert "mcp-serve" in actions
-        assert "backend-serve" in actions
-        assert "status" in actions
-        assert "tools" in actions
-
-
-class TestWebextractCli:
-    def test_cmd_webextract_exits_when_result_contains_error_without_text(self, monkeypatch):
-        import scholaraio.providers.webtools as webtools
-
-        messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(
-            webtools,
-            "extract_web",
-            lambda *args, **kwargs: {"title": "", "text": "", "error": "partial extraction failed"},
-        )
-
-        args = Namespace(url="https://example.com", pdf=False, full=False, max_chars=10)
-
-        with pytest.raises(SystemExit) as exc:
-            cli.cmd_webextract(args, SimpleNamespace())
-
-        assert exc.value.code == 1
-        assert any("Extraction failed: partial extraction failed" in message for message in messages)
-        assert all("Extraction succeeded" not in message for message in messages)
-
-    def test_cmd_webextract_truncates_long_text_by_default(self, monkeypatch, capsys):
-        import scholaraio.providers.webtools as webtools
-
-        messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(
-            webtools,
-            "extract_web",
-            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
-        )
-
-        args = Namespace(url="https://example.com", pdf=False, full=False, max_chars=10)
-        cli.cmd_webextract(args, SimpleNamespace())
-
-        captured = capsys.readouterr()
-
-        assert any("Extraction succeeded: Page" in message for message in messages)
-        assert any("Content is long" in message for message in messages)
-        assert "abcdefghij" in captured.out
-        assert "klmnopqrstuvwxyz" not in captured.out
-
-    def test_cmd_webextract_full_prints_complete_text(self, monkeypatch, capsys):
-        import scholaraio.providers.webtools as webtools
-
-        messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(
-            webtools,
-            "extract_web",
-            lambda *args, **kwargs: {"title": "Page", "text": "abcdefghijklmnopqrstuvwxyz"},
-        )
-
-        args = Namespace(url="https://example.com", pdf=False, full=True, max_chars=10)
-        cli.cmd_webextract(args, SimpleNamespace())
-
-        captured = capsys.readouterr()
-
-        assert any("Extraction succeeded: Page" in message for message in messages)
-        assert all("Truncated" not in message for message in messages)
-        assert "abcdefghijklmnopqrstuvwxyz" in captured.out
-
 
 class TestShowLayer4Headings:
     def test_translated_full_text_heading_uses_consistent_spacing(self, tmp_papers, monkeypatch):
@@ -409,8 +328,8 @@ class TestShowLayer4Headings:
         (paper_dir / "paper_zh.md").write_text("中文全文。", encoding="utf-8")
 
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_print_header", lambda _: None)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
         args = Namespace(paper_id="Smith-2023-Turbulence", layer=4, lang="zh")
@@ -421,8 +340,8 @@ class TestShowLayer4Headings:
 
     def test_missing_translation_heading_uses_consistent_spacing(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_print_header", lambda _: None)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
         args = Namespace(paper_id="Smith-2023-Turbulence", layer=4, lang="fr")
@@ -438,8 +357,10 @@ class TestRefetchIdentifierResolution:
 
         seen: list[Path] = []
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr("scholaraio.services.ingest_metadata.refetch_metadata", lambda jp: seen.append(jp) or True)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.services.ingest_metadata.refetch_metadata", lambda jp, *, db_path: seen.append(jp) or True
+        )
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
         args = Namespace(paper_id="aaaa-1111", all=False, force=False, jobs=5)
@@ -453,8 +374,10 @@ class TestRefetchIdentifierResolution:
     def test_refetch_resolves_mixed_case_doi_without_registry(self, tmp_papers, tmp_path, monkeypatch):
         seen: list[Path] = []
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr("scholaraio.services.ingest_metadata.refetch_metadata", lambda jp: seen.append(jp) or True)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(
+            "scholaraio.services.ingest_metadata.refetch_metadata", lambda jp, *, db_path: seen.append(jp) or True
+        )
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_path / "missing-index.db")
         args = Namespace(paper_id="10.1234/JFM.2023.001", all=False, force=False, jobs=5)
@@ -492,7 +415,7 @@ class TestRefetchIdentifierResolution:
 
         seen: list[tuple[Path, bool]] = []
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr(
             "scholaraio.services.ingest_metadata.refetch_metadata",
             lambda jp, references_only=False: seen.append((jp, references_only)) or True,
@@ -818,7 +741,7 @@ class TestShowIdentifierDisplay:
         meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
         args = Namespace(paper_id="10.1234/jfm.2023.001", layer=1)
@@ -837,7 +760,7 @@ class TestShowIdentifierDisplay:
         meta_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_db)
         args = Namespace(paper_id="10.1234/jfm.2023.001", layer=1)
@@ -854,8 +777,8 @@ class TestShowNotesIntegration:
         (paper_dir / "notes.md").write_text("## 2026-03-26 | test | analysis\n- Key finding\n", encoding="utf-8")
 
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_print_header", lambda _: None)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
         args = Namespace(paper_id="Smith-2023-Turbulence", layer=1)
@@ -868,8 +791,8 @@ class TestShowNotesIntegration:
 
     def test_no_notes_section_when_file_missing(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_print_header", lambda _: None)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
         args = Namespace(paper_id="Smith-2023-Turbulence", layer=1)
@@ -880,8 +803,8 @@ class TestShowNotesIntegration:
 
     def test_append_notes_visible_in_same_show(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_print_header", lambda _: None)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
         args = Namespace(
@@ -898,8 +821,8 @@ class TestShowNotesIntegration:
 
     def test_append_notes_empty_ignored(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_print_header", lambda _: None)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_print_header", lambda _: None)
 
         cfg = SimpleNamespace(papers_dir=tmp_papers, index_db=tmp_papers / "index.db")
         args = Namespace(paper_id="Smith-2023-Turbulence", layer=1, append_notes="   ")
@@ -920,7 +843,7 @@ class TestSearchResultFormatting:
         def fake_ui(message: str = "") -> None:
             messages.append(message)
 
-        monkeypatch.setattr(cli, "ui", fake_ui)
+        monkeypatch.setattr(target_log, "ui", fake_ui)
 
         cli._print_search_result(
             1,
@@ -942,9 +865,9 @@ class TestSearchResultFormatting:
 class TestUnifiedSearchDegradeWarnings:
     def test_cmd_usearch_warns_when_vector_search_degrades(self, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", lambda msg="": messages.append(msg))
+        monkeypatch.setattr(target_log, "ui", lambda msg="": messages.append(msg))
         monkeypatch.setattr("scholaraio.services.metrics.get_store", lambda: None)
-        monkeypatch.setattr(cli, "_record_search_metrics", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_search_metrics, "_record_search_metrics", lambda *_args, **_kwargs: None)
         monkeypatch.setattr(
             "scholaraio.services.index.unified_search",
             lambda *_args, **_kwargs: (
@@ -976,7 +899,7 @@ class TestChunkSearchCli:
     def test_cmd_index_delegates_to_chunk_index_when_requested(self, tmp_papers, tmp_db, monkeypatch):
         seen: list[tuple[Path, Path, bool]] = []
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr(
             "scholaraio.services.chunks.build_chunk_index",
             lambda papers_dir, db_path, rebuild=False: seen.append((papers_dir, db_path, rebuild)) or 7,
@@ -993,9 +916,9 @@ class TestChunkSearchCli:
     def test_cmd_search_prints_chunk_line_addresses_and_snippets(self, tmp_db, monkeypatch):
         messages: list[str] = []
         seen: dict[str, object] = {}
-        monkeypatch.setattr(cli, "ui", lambda msg="": messages.append(msg))
+        monkeypatch.setattr(target_log, "ui", lambda msg="": messages.append(msg))
         monkeypatch.setattr("scholaraio.services.metrics.get_store", lambda: None)
-        monkeypatch.setattr(cli, "_record_search_metrics", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_search_metrics, "_record_search_metrics", lambda *_args, **_kwargs: None)
 
         def fake_chunk_search(query, db_path, top_k=20, *, year=None, journal=None, paper_type=None):
             seen.update(
@@ -1051,7 +974,7 @@ class TestChunkSearchCli:
 
     def test_cmd_fsearch_warns_when_main_scope_vector_search_degrades(self, monkeypatch, tmp_path):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", lambda msg="": messages.append(msg))
+        monkeypatch.setattr(target_log, "ui", lambda msg="": messages.append(msg))
         monkeypatch.setattr(
             "scholaraio.services.index.unified_search",
             lambda *_args, **_kwargs: (
@@ -1083,7 +1006,7 @@ class TestChunkSearchCli:
 class TestToolrefCliMessages:
     def test_toolref_show_output_is_localized(self, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr(
             "scholaraio.stores.toolref.toolref_show",
             lambda tool, *path, cfg=None: [
@@ -1111,7 +1034,7 @@ class TestToolrefCliMessages:
 class TestArxivCommands:
     def test_arxiv_fetch_downloads_to_inbox_without_ingest(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         downloaded = tmp_path / "data" / "inbox" / "2603.25200.pdf"
 
@@ -1132,7 +1055,7 @@ class TestArxivCommands:
 
     def test_arxiv_fetch_ingest_uses_temp_inbox_pipeline(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         def fake_download(arxiv_ref, dest_dir, *, overwrite=False):
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -1162,7 +1085,7 @@ class TestArxivCommands:
 
     def test_arxiv_fetch_reports_download_failure(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr(
             "scholaraio.providers.arxiv.download_arxiv_pdf",
             lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("timeout")),
@@ -1179,9 +1102,9 @@ class TestArxivCommands:
 class TestFederatedArxivPresence:
     def test_fsearch_marks_arxiv_only_ingested_paper_as_present(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", lambda msg="": messages.append(msg))
+        monkeypatch.setattr(target_log, "ui", lambda msg="": messages.append(msg))
         monkeypatch.setattr(
-            cli,
+            target_fsearch,
             "_search_arxiv",
             lambda query, top_k: [
                 {
@@ -1193,7 +1116,7 @@ class TestFederatedArxivPresence:
                 }
             ],
         )
-        monkeypatch.setattr(cli, "_query_dois_for_set", lambda cfg, doi_set: set())
+        monkeypatch.setattr(target_fsearch, "_query_dois_for_set", lambda cfg, doi_set: set())
 
         paper_dir = tmp_path / "papers" / "Imamura-1999-String-Junctions"
         paper_dir.mkdir(parents=True)
@@ -1220,8 +1143,8 @@ class TestFederatedArxivPresence:
 class TestTranslateCliProgress:
     def test_cmd_translate_reports_portable_export_path(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_resolve_paper", lambda paper_id, cfg: tmp_papers / paper_id)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda paper_id, cfg: tmp_papers / paper_id)
         monkeypatch.setattr(
             "scholaraio.services.translate.translate_paper",
             lambda *args, **kwargs: TranslateResult(
@@ -1251,8 +1174,8 @@ class TestTranslateCliProgress:
 
     def test_cmd_translate_reports_resumable_partial_progress(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
-        monkeypatch.setattr(cli, "_resolve_paper", lambda paper_id, cfg: tmp_papers / paper_id)
+        monkeypatch.setattr(target_log, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda paper_id, cfg: tmp_papers / paper_id)
         monkeypatch.setattr(
             "scholaraio.services.translate.translate_paper",
             lambda *args, **kwargs: TranslateResult(
@@ -1283,7 +1206,7 @@ class TestTranslateCliProgress:
 class TestExploreCliConfiguredRoots:
     def test_cmd_explore_list_uses_configured_explore_root(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "stores" / "explore"
         custom_lib = custom_root / "alpha"
@@ -1310,7 +1233,7 @@ class TestExploreCliConfiguredRoots:
 
     def test_cmd_explore_info_uses_configured_explore_root(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "stores" / "explore"
         custom_lib = custom_root / "jfm"
@@ -1330,7 +1253,7 @@ class TestExploreCliConfiguredRoots:
 
     def test_cmd_explore_info_without_name_uses_configured_explore_root(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "stores" / "explore"
         custom_lib = custom_root / "alpha"
@@ -1392,7 +1315,7 @@ class TestWorkspaceCliConfiguredRoots:
 
     def test_cmd_ws_init_uses_configured_workspace_dir(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "projects"
         cfg = SimpleNamespace(_root=tmp_path, workspace_dir=custom_root, index_db=tmp_path / "index.db")
@@ -1406,7 +1329,7 @@ class TestWorkspaceCliConfiguredRoots:
 
     def test_cmd_ws_add_updates_future_refs_layout_without_creating_legacy_index(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "projects"
         ws_dir = custom_root / "study" / "refs"
@@ -1432,7 +1355,7 @@ class TestWorkspaceCliConfiguredRoots:
 
     def test_cmd_ws_list_shows_manifest_summary(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "projects"
         ws_dir = custom_root / "study" / "refs"
@@ -1461,7 +1384,7 @@ tags:
 
     def test_cmd_ws_show_shows_manifest_details(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "projects"
         ws_dir = custom_root / "study" / "refs"
@@ -1511,7 +1434,7 @@ outputs:
 
     def test_cmd_ws_show_ignores_unknown_mount_buckets(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "projects"
         ws_dir = custom_root / "study"
@@ -1540,7 +1463,7 @@ mounts:
 
     def test_cmd_ws_show_keeps_newer_manifest_schema_opaque(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         custom_root = tmp_path / "projects"
         ws_dir = custom_root / "study"
@@ -1608,7 +1531,7 @@ outputs:
 
         monkeypatch.setattr("scholaraio.services.export.export_docx", fake_export_docx)
         monkeypatch.setattr(
-            cli,
+            target_paths,
             "_default_docx_output_path",
             lambda cfg: tmp_path / "projects" / "_system" / "output" / "note.docx",
             raising=False,
@@ -1700,7 +1623,7 @@ class TestArxivCliConfiguredRoots:
         messages: list[str] = []
         seen: dict[str, Path] = {}
 
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("scholaraio.providers.arxiv.normalize_arxiv_ref", lambda ref: "2603.25200")
 
         def fake_download(arxiv_id, inbox_dir, overwrite=False):
@@ -1726,7 +1649,7 @@ class TestArxivCliConfiguredRoots:
 class TestEnrichTocCliProgress:
     def test_cmd_enrich_toc_reports_single_paper_success(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         def fake_enrich_toc(json_path, md_path, cfg, *, force=False, inspect=False):
             data = json.loads(json_path.read_text(encoding="utf-8"))
@@ -1746,7 +1669,7 @@ class TestEnrichTocCliProgress:
 
     def test_cmd_enrich_toc_all_uses_llm_concurrency_budget(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         max_workers_seen: list[int] = []
         submitted: list[str] = []
@@ -1798,7 +1721,7 @@ class TestEnrichTocCliProgress:
 class TestEnrichL3CliBatchRetries:
     def test_cmd_enrich_l3_all_retries_failed_papers_with_backoff(self, tmp_papers, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         sleep_delays: list[float] = []
         monkeypatch.setattr(cli.time, "sleep", sleep_delays.append)
@@ -1860,7 +1783,11 @@ class TestImportEndnoteOptionalDeps:
 
         errors: list[str] = []
 
-        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            logging.getLogger("scholaraio.interfaces.cli.dependencies"),
+            "error",
+            lambda msg, *args: errors.append(msg % args if args else msg),
+        )
         monkeypatch.setattr(
             "scholaraio.providers.endnote._load_endnote_core",
             lambda: (_ for _ in ()).throw(ModuleNotFoundError("No module named 'endnote_utils'", name="endnote_utils")),
@@ -1883,7 +1810,11 @@ class TestImportEndnoteOptionalDeps:
 class TestOptionalDependencyHints:
     def test_office_dependency_hint_uses_scholaraio_extra(self, monkeypatch):
         errors: list[str] = []
-        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            logging.getLogger("scholaraio.interfaces.cli.dependencies"),
+            "error",
+            lambda msg, *args: errors.append(msg % args if args else msg),
+        )
 
         try:
             cli._check_import_error(ModuleNotFoundError("No module named 'docx'", name="docx"))
@@ -1897,7 +1828,11 @@ class TestOptionalDependencyHints:
 
     def test_pdf_dependency_hint_uses_scholaraio_extra(self, monkeypatch):
         errors: list[str] = []
-        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            logging.getLogger("scholaraio.interfaces.cli.dependencies"),
+            "error",
+            lambda msg, *args: errors.append(msg % args if args else msg),
+        )
 
         try:
             cli._check_import_error(ModuleNotFoundError("No module named 'fitz'", name="fitz"))
@@ -1913,7 +1848,11 @@ class TestOptionalDependencyHints:
 class TestTopicCliErrors:
     def test_cmd_topics_reports_embedding_disabled_cleanly(self, tmp_path, monkeypatch):
         errors: list[str] = []
-        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            logging.getLogger("scholaraio.interfaces.cli.topics"),
+            "error",
+            lambda msg, *args: errors.append(msg % args if args else msg),
+        )
         monkeypatch.setattr(
             "scholaraio.services.topics.build_topics",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(
@@ -1950,7 +1889,11 @@ class TestTopicCliErrors:
 
     def test_cmd_explore_topics_reports_embedding_disabled_cleanly(self, tmp_path, monkeypatch):
         errors: list[str] = []
-        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            logging.getLogger("scholaraio.interfaces.cli.explore"),
+            "error",
+            lambda msg, *args: errors.append(msg % args if args else msg),
+        )
         monkeypatch.setattr("scholaraio.stores.explore._explore_dir", lambda *_args, **_kwargs: tmp_path / "explore")
         monkeypatch.setattr(
             "scholaraio.stores.explore.build_explore_topics",
@@ -1982,7 +1925,11 @@ class TestTopicCliErrors:
 
     def test_cmd_explore_search_semantic_reports_embedding_disabled_cleanly(self, monkeypatch):
         errors: list[str] = []
-        monkeypatch.setattr(cli._log, "error", lambda msg, *args: errors.append(msg % args if args else msg))
+        monkeypatch.setattr(
+            logging.getLogger("scholaraio.interfaces.cli.explore"),
+            "error",
+            lambda msg, *args: errors.append(msg % args if args else msg),
+        )
         monkeypatch.setattr(
             "scholaraio.stores.explore.explore_vsearch",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(
@@ -2021,8 +1968,8 @@ class TestAttachPdfFallback:
         messages: list[str] = []
 
         cfg = SimpleNamespace(papers_dir=tmp_path / "papers")
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         args = Namespace(paper_id="paper-1", pdf_path=str(src_pdf), dry_run=False, force=False)
         with pytest.raises(SystemExit) as exc:
@@ -2065,8 +2012,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: ""
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", lambda *_args, **_kwargs: None)
 
         import scholaraio.providers.mineru as mineru
         import scholaraio.providers.pdf_fallback as pdf_fallback
@@ -2120,8 +2067,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: ""
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", lambda *_args, **_kwargs: None)
 
         import scholaraio.providers.mineru as mineru
         import scholaraio.providers.pdf_fallback as pdf_fallback
@@ -2185,8 +2132,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: "token"
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", lambda *_args, **_kwargs: None)
 
         import scholaraio.providers.mineru as mineru
 
@@ -2243,8 +2190,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: "token"
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", lambda *_args, **_kwargs: None)
 
         import scholaraio.providers.mineru as mineru
 
@@ -2294,8 +2241,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: "token"
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", lambda *_args, **_kwargs: None)
 
         import scholaraio.providers.mineru as mineru
 
@@ -2355,8 +2302,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: "token"
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", lambda *_args, **_kwargs: None)
 
         import scholaraio.providers.mineru as mineru
 
@@ -2413,8 +2360,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: "token"
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", lambda *_args, **_kwargs: None)
 
         import scholaraio.providers.mineru as mineru
 
@@ -2472,8 +2419,8 @@ class TestAttachPdfFallback:
         )
         cfg.resolved_mineru_api_key = lambda: "token"
 
-        monkeypatch.setattr(cli, "_resolve_paper", lambda *_: paper_dir)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_paper, "_resolve_paper", lambda *_: paper_dir)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         import scholaraio.providers.mineru as mineru
         import scholaraio.providers.pdf_fallback as pdf_fallback
@@ -2522,7 +2469,7 @@ class TestSetupMetricsFallback:
                 resolved_s2_api_key=lambda: "",
             ),
         )
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("scholaraio.core.log.setup", lambda cfg: "session-1")
 
         def _boom(*_args, **_kwargs):
@@ -2566,7 +2513,7 @@ class TestMigrationLockGating:
 
         messages: list[str] = []
         monkeypatch.setattr(cli, "load_config", lambda: cfg)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("sys.argv", ["scholaraio", "metrics", "--summary"])
 
         with pytest.raises(SystemExit) as exc:
@@ -2585,7 +2532,7 @@ class TestMigrationLockGating:
 
         messages: list[str] = []
         monkeypatch.setattr(cli, "load_config", lambda: cfg)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("sys.argv", ["scholaraio", "migrate", "status"])
 
         cli.main()
@@ -2595,7 +2542,7 @@ class TestMigrationLockGating:
 
     def test_cmd_migrate_recover_clear_lock_marks_instance_needs_recovery(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2620,7 +2567,7 @@ class TestMigrationLockGating:
 
         messages: list[str] = []
         monkeypatch.setattr(cli, "load_config", lambda: cfg)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("sys.argv", ["scholaraio", "migrate", "status"])
 
         cli.main()
@@ -2648,7 +2595,7 @@ class TestMigrationLockGating:
 
         messages: list[str] = []
         monkeypatch.setattr(cli, "load_config", lambda: cfg)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("sys.argv", ["scholaraio", "migrate", "status"])
 
         cli.main()
@@ -2667,7 +2614,7 @@ class TestFutureLayoutGating:
 
         messages: list[str] = []
         monkeypatch.setattr(cli, "load_config", lambda: cfg)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("sys.argv", ["scholaraio", "metrics", "--summary"])
 
         with pytest.raises(SystemExit) as exc:
@@ -2687,7 +2634,7 @@ class TestFutureLayoutGating:
 
         messages: list[str] = []
         monkeypatch.setattr(cli, "load_config", lambda: cfg)
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
         monkeypatch.setattr("sys.argv", ["scholaraio", "migrate", "status"])
 
         cli.main()
@@ -2698,7 +2645,7 @@ class TestFutureLayoutGating:
 class TestMigrationVerify:
     def test_cmd_migrate_verify_refreshes_latest_journal(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2717,7 +2664,7 @@ class TestMigrationVerify:
 
     def test_cmd_migrate_verify_requires_existing_journal(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2733,7 +2680,7 @@ class TestMigrationVerify:
 class TestMigrationPlan:
     def test_cmd_migrate_plan_writes_requested_journal(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2751,7 +2698,7 @@ class TestMigrationPlan:
 
     def test_cmd_migrate_plan_reports_planned_legacy_moves(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2768,7 +2715,7 @@ class TestMigrationPlan:
 class TestMigrationCleanup:
     def test_cmd_migrate_cleanup_requires_successful_verify(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2783,7 +2730,7 @@ class TestMigrationCleanup:
 
     def test_cmd_migrate_cleanup_records_preview_and_status(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2807,7 +2754,7 @@ class TestMigrationCleanup:
 
     def test_cmd_migrate_cleanup_reports_archived_recorded_candidates(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         legacy_styles = tmp_path / "data" / "citation_styles"
         legacy_styles.mkdir(parents=True, exist_ok=True)
@@ -2832,7 +2779,7 @@ class TestMigrationCleanup:
 class TestMigrationRun:
     def test_cmd_migrate_run_requires_confirm(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         cfg = _build_config({}, tmp_path)
         cfg.ensure_dirs()
@@ -2850,7 +2797,7 @@ class TestMigrationRun:
 
     def test_cmd_migrate_run_citation_styles_reports_result(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         legacy_styles = tmp_path / "data" / "citation_styles"
         legacy_styles.mkdir(parents=True, exist_ok=True)
@@ -2875,7 +2822,7 @@ class TestMigrationRun:
 
     def test_cmd_migrate_run_toolref_reports_result(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         _write_toolref_fixture(tmp_path / "data" / "toolref")
 
@@ -2894,7 +2841,7 @@ class TestMigrationRun:
 
     def test_cmd_migrate_run_explore_reports_result(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         _write_explore_fixture(tmp_path / "data" / "explore")
 
@@ -2913,7 +2860,7 @@ class TestMigrationRun:
 
     def test_cmd_migrate_run_proceedings_reports_result(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         _write_proceedings_fixture(tmp_path / "data" / "proceedings")
 
@@ -2937,7 +2884,7 @@ class TestMigrationRun:
 
     def test_cmd_migrate_run_spool_reports_result(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         _write_spool_fixture(tmp_path / "data")
 
@@ -2964,7 +2911,7 @@ class TestMigrationRun:
         from scholaraio.services.index import build_index
 
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         _write_papers_fixture(tmp_path / "data" / "papers")
 
@@ -2992,7 +2939,7 @@ class TestMigrationRun:
 class TestMigrationUpgrade:
     def test_cmd_migrate_upgrade_reports_one_command_result(self, tmp_path, monkeypatch):
         messages: list[str] = []
-        monkeypatch.setattr(cli, "ui", messages.append)
+        monkeypatch.setattr(target_log, "ui", messages.append)
 
         legacy_styles = tmp_path / "data" / "citation_styles"
         legacy_styles.mkdir(parents=True, exist_ok=True)
@@ -3020,3 +2967,30 @@ class TestMigrationUpgrade:
         assert any("stores: workspace, citation_styles, papers" in msg for msg in messages)
         assert any("finalize_status: completed" in msg for msg in messages)
         assert any("verify_after_cleanup: passed" in msg for msg in messages)
+
+
+@pytest.mark.parametrize("action", ["show", "remove", "add"])
+def test_workspace_missing_or_concurrently_renamed_is_reported(tmp_path, monkeypatch, action):
+    from scholaraio.projects import workspace
+
+    messages = []
+    monkeypatch.setattr(target_log, "ui", messages.append)
+    root = tmp_path / "projects"
+    root.mkdir()
+    cfg = SimpleNamespace(_root=tmp_path, workspace_dir=root, index_db=tmp_path / "unused.db")
+    args = Namespace(
+        ws_action=action, name="study", paper_refs=["paper"], add_all=False, add_topic=None, add_search=None
+    )
+    if action == "add":
+        workspace.create(root / "study")
+        original = workspace.add
+
+        def rename_before_add(*args, **kwargs):
+            workspace.rename(root, "study", "moved")
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(workspace, "add", rename_before_add)
+    cli.cmd_ws(args, cfg)
+    assert any("工作区不存在" in message for message in messages)
+    assert not (root / "study").exists()
+    assert not any("Added" in message or "Removed" in message for message in messages)

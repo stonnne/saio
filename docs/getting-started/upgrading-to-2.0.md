@@ -84,17 +84,22 @@ files until migration verification passes. See [Upgrading To
 
 ## Removed Or Narrowed Surfaces
 
-- The old `websearch` skill and CLI command are removed. Use the active agent's
-  native web search for live discovery; use `webextract` for rendered content
-  extraction and `ingest-link` when the result should enter the library.
+- ScholarAIO 2.0 removed the old `websearch` surface. The external `webextract`
+  and `ingest-link` adapters remained part of the 2.0 contract; the next-major
+  breaking cleanup removes them. On that cleanup branch, use the active agent's
+  native web search and URL reading; when web content should enter the library,
+  save a reviewable document to an inbox and use the normal ingest workflow.
 - The empty `scholaraio[draw]` extra is removed. Diagram source generation
   remains available; Graphviz and Inkscape are explicit system tools when
   rendering requires them.
 - Legacy root-level Python facade modules and implicit legacy runtime-root
   detection remain removed. Use canonical package namespaces and the explicit
   migration workflow.
-- Paper2Any and other large third-party workflows remain optional sidecars; they
-  are not installed or required by the default ScholarAIO runtime.
+- The next-major breaking cleanup also removes the Paper2Any CLI, sidecar,
+  configuration, setup diagnostics, and skill. Use the active agent's native
+  document, diagram, poster, and presentation workflows instead. Existing
+  external checkouts and generated artifacts are not part of the 2.x runtime
+  data contract.
 
 ## 2.x Compatibility Promise
 

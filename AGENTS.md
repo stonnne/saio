@@ -45,9 +45,9 @@ The canonical project skill source is `.claude/skills/`. Cross-agent discovery p
 
 Representative skills to check first:
 
-- Core research: `search`, `show`, `ingest`, `ingest-link`, `paper-assets`, `workspace`, `audit`, `translate`
+- Core research: `search`, `show`, `ingest`, `paper-assets`, `workspace`, `audit`, `translate`
 - Writing: `academic-writing`, `nature-workflow`, `literature-review`, `paper-guided-reading`, `paper-writing`, `paper-spine`, `citation-check`, `writing-polish`, `review-response`, `research-gap`, `poster`, `technical-report`
-- Outputs and tooling: `draw`, `document`, `publish`, `webextract`, `scientific-runtime`, `scientific-tool-onboarding`
+- Outputs and tooling: `draw`, `document`, `publish`, `scientific-runtime`, `scientific-tool-onboarding`
 
 If a workflow has grown into a reusable playbook, move it into a skill instead of expanding this file.
 
@@ -119,10 +119,6 @@ Common verification commands in this repo:
 - GitHub Copilot: `.github/copilot-instructions.md`, then `AGENTS.md`
 
 Keep these wrappers lightweight. Do not turn every wrapper into a second full manual.
-
-Optional webtools MCP servers are listed in `.mcp.json` for hosts that support
-project MCP JSON. Codex uses its own MCP registry; see
-`docs/guide/webtools-integration.md` for `codex mcp add ...` commands.
 
 ## Deep Reference
 

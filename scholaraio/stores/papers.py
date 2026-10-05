@@ -12,33 +12,98 @@ papers.py — 论文目录结构的唯一真相源
 
 from __future__ import annotations
 
+import html
 import json
+import math
 import re
 import shutil
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
+from scholaraio.core.fileio import atomic_write_text, file_lock
 
-def normalize_paper_type(value: object) -> str:
-    """Return the canonical kebab-case paper type used by filters and views."""
+_REVIEW_ONLY_JOURNAL_PREFIXES = (
+    "annual review of ",
+    "current opinion in ",
+    "foundations and trends in ",
+    "living reviews in ",
+    "nature reviews ",
+)
+
+_REVIEW_ONLY_JOURNALS = frozenset(
+    {
+        "applied mechanics reviews",
+        "physics reports",
+        "progress in aerospace sciences",
+        "progress in energy and combustion science",
+        "renewable and sustainable energy reviews",
+        "reports on progress in physics",
+        "reviews in chemical engineering",
+        "reviews of geophysics",
+        "reviews of modern physics",
+        "space science reviews",
+    }
+)
+
+
+def _normalized_journal_name(value: object) -> str:
+    text = html.unescape(str(value or "")).replace("®", " ")
+    return re.sub(r"\s+", " ", text).strip().casefold()
+
+
+def is_review_only_journal(value: object) -> bool:
+    """Return whether a venue publishes review articles by design.
+
+    The allowlist is deliberately conservative.  Generic names containing
+    words such as ``Review`` or ``Progress`` are not enough because journals
+    such as Physical Review and ordinary research venues would be false
+    positives.
+    """
+    journal = _normalized_journal_name(value)
+    return journal in _REVIEW_ONLY_JOURNALS or journal.startswith(_REVIEW_ONLY_JOURNAL_PREFIXES)
+
+
+def normalize_paper_type(value: object, journal: object = "", doi: object = "") -> str:
+    """Return the canonical paper type used in metadata, filters, and views."""
     raw = str(value or "").strip()
-    if not raw:
-        return ""
-    text = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", raw)
-    text = re.sub(r"[\s_]+", "-", text).lower().strip("-")
-    text = re.sub(r"-+", "-", text)
-    compact = re.sub(r"[^a-z0-9]", "", text)
+    text = ""
+    compact = ""
+    if raw:
+        text = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", raw)
+        text = re.sub(r"[\s_]+", "-", text).lower().strip("-")
+        text = re.sub(r"-+", "-", text)
+        compact = re.sub(r"[^a-z0-9]", "", text)
     aliases = {
         "article": "journal-article",
+        "jour": "journal-article",
         "journalarticle": "journal-article",
+        "monograph": "book",
         "researcharticle": "journal-article",
         "proceedingsarticle": "conference-paper",
         "conferencearticle": "conference-paper",
         "conferencepaper": "conference-paper",
         "bookchapter": "book-chapter",
     }
-    return aliases.get(compact, text)
+    paper_type = aliases.get(compact, text)
+    if not paper_type and str(journal or "").strip() and str(doi or "").strip():
+        paper_type = "journal-article"
+    if paper_type in {"", "journal-article"} and is_review_only_journal(journal):
+        return "review"
+    return paper_type
+
+
+def normalize_paper_metadata(data: dict) -> dict:
+    """Return a shallow copy with ``paper_type`` normalized canonically."""
+    normalized = dict(data)
+    paper_type = normalize_paper_type(
+        normalized.get("paper_type"),
+        normalized.get("journal"),
+        normalized.get("doi"),
+    )
+    if paper_type or "paper_type" in normalized:
+        normalized["paper_type"] = paper_type
+    return normalized
 
 
 def authors_text(authors: object) -> str:
@@ -169,10 +234,10 @@ def best_citation(meta: dict) -> int:
     if not cc:
         return 0
     if isinstance(cc, (int, float)):
-        return int(cc)
+        return int(cc) if not isinstance(cc, float) or math.isfinite(cc) else 0
     if not isinstance(cc, dict):
         return 0
-    vals = [v for v in cc.values() if isinstance(v, (int, float))]
+    vals = [v for v in cc.values() if isinstance(v, (int, float)) and (not isinstance(v, float) or math.isfinite(v))]
     return int(max(vals)) if vals else 0
 
 
@@ -220,7 +285,10 @@ def read_meta(paper_d: Path) -> dict:
     """
     p = paper_d / "meta.json"
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"Metadata must be a JSON object: {p}")
+        return data
     except json.JSONDecodeError as e:
         raise ValueError(f"Malformed JSON in {p}: {e}") from e
 
@@ -236,12 +304,30 @@ def write_meta(paper_d: Path, data: dict) -> None:
         data: Metadata dict to serialize.
     """
     p = paper_d / "meta.json"
-    tmp = p.with_suffix(".json.tmp")
-    tmp.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
-    tmp.replace(p)
+    with file_lock(p):
+        _write_meta_unlocked(p, data)
+
+
+def _write_meta_unlocked(path: Path, data: dict) -> None:
+    atomic_write_text(path, json.dumps(normalize_paper_metadata(data), indent=2, ensure_ascii=False) + "\n")
+    from scholaraio.stores.library_state import notify_metadata_write
+
+    notify_metadata_write(path)
+
+
+def modify_meta(paper_d: Path, edit: Callable[[dict], None]) -> dict:
+    """Apply a short in-memory edit to the latest metadata under a record lock.
+
+    Do expensive extraction/network work before entering this transaction.
+    ``write_meta`` replaces a whole record; use this or ``update_meta`` when
+    changing fields of an existing record so unrelated concurrent edits survive.
+    """
+    with file_lock(paper_d / "meta.json"):
+        data = read_meta(paper_d)
+        edit(data)
+        data = normalize_paper_metadata(data)
+        _write_meta_unlocked(paper_d / "meta.json", data)
+        return data
 
 
 def update_meta(paper_d: Path, **fields) -> dict:
@@ -254,7 +340,4 @@ def update_meta(paper_d: Path, **fields) -> dict:
     Returns:
         The updated metadata dict.
     """
-    data = read_meta(paper_d)
-    data.update(fields)
-    write_meta(paper_d, data)
-    return data
+    return modify_meta(paper_d, lambda data: data.update(fields))

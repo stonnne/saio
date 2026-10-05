@@ -62,12 +62,6 @@ is an error, and unreadable metadata suppresses deletion cleanup for that run.
 
 ```text
 scholaraio pipeline [preset]
-scholaraio ingest-link <url> [<url> ...]
-scholaraio webextract <url> [--pdf] [--full] [--max-chars N]
-scholaraio paper2any setup [--install-runtime]
-scholaraio paper2any mcp-serve
-scholaraio paper2any backend-serve
-scholaraio paper2any status|tools|call
 scholaraio patent-search <query> [--count N]
 scholaraio patent-fetch <publication-number-or-url>
 scholaraio enrich-toc
@@ -83,12 +77,9 @@ scholaraio fetch-pdf --all [--direct] [--force]
 ```
 
 - `pipeline` is the main composable ingest entrypoint.
-- `ingest-link` pulls one or more rendered web URLs or online PDFs through an external `qt-web-extractor` service and routes them into the existing document ingest flow.
 - `fetch-pdf` downloads publisher PDFs through the current user network and access context. It does not bypass access controls; use `--direct` to ignore proxy environment variables such as Clash when the campus network itself has access.
 - `fetch-pdf --ingest` sends only the fetched PDF into the ingest pipeline. Without `--out-dir`, the PDF is staged temporarily and is not left in the configured inbox; use `--out-dir` to keep a separate downloaded copy. If `--out-dir` is supplied, the PDF is saved there but ingested through an isolated temporary single-file inbox, so unrelated PDFs in that directory are not processed.
-- Use the host agent's native web search for live discovery. ScholarAIO does not expose a default discovery CLI or search MCP server.
-- `webextract` extracts rendered web content through `qt-web-extractor` when native URL reading is insufficient or ingestion-ready Markdown is required; prefer `webextract.transport: mcp` with the `fetch_url` tool, while the legacy HTTP `/extract` transport remains supported. By default it prints a preview, and `--full` expands to the full body.
-- `paper2any` starts and calls the lightweight MCP sidecar for an external OpenDCAI/Paper2Any checkout. Use it for real Paper2Any paper-to-figure, PPT, poster, video, citation, rebuttal, DrawIO, mindmap, PDF-to-PPT, image-to-PPT, and KB workflows without vendoring Paper2Any into ScholarAIO.
+- Use the host agent's native web search and URL-reading tools for live discovery and web content. ScholarAIO does not expose a web discovery/extraction CLI or register a web MCP server.
 - `patent-search` discovers patent candidates through USPTO PPUBS by default, with optional ODP API support.
 - `patent-fetch` downloads a patent PDF into the configured patent inbox for the normal patent ingest flow.
 - `refetch` refreshes citation counts, bibliographic metadata, and structured `references` for already ingested papers.
@@ -139,8 +130,9 @@ scholaraio migrate finalize --migration-id <id> --confirm
 - `migrate finalize` remains available when a user or operator has already run store-level migration steps manually and only needs final cleanup and verification.
 
 - `import-endnote` and `import-zotero` bring existing libraries into ScholarAIO.
-- `export` handles BibTeX, RIS, Markdown, and DOCX export.
+- `export` handles BibTeX, RIS, Markdown, and DOCX export. BibTeX exports and WebUI Copy BibTeX omit abstracts; stored metadata and RIS abstracts are unchanged.
 - `publish-site` generates a static site from audited `published/*/metadata.json` archives, copying PDF/source assets by default and supporting `--symlink` for local preview.
+- `pdf-recovery inspect|export|resolve` reviews retained PDF versions and resolves conflicts with snapshot validation. See the [Library WebUI guide](library-webui.md#paged-browsing-and-explicit-pdf-recovery).
 - `gui` starts a local, metadata-read-only WebUI with live refresh, audit status, Markdown-rendered abstracts/conclusions, composable metadata filters, server-backed Keyword/Semantic/Unified retrieval for the main library, canonical per-record BibTeX copy, inline PDF preview, and a loopback-only action for opening PDFs in the operating system's default viewer. On WSL, that action uses a stable Windows edit mirror and automatically reconciles valid PDF saves back to the canonical library copy. The WebUI serves only packaged local assets and does not load remote runtime scripts. See the [Library WebUI guide](library-webui.md).
 - `ws` manages paper subsets for focused projects and writing workflows.
 
@@ -184,6 +176,7 @@ scholaraio citation-check
 
 - `audit` checks missing metadata, duplicate DOIs, filename issues, and title/content mismatches.
 - `audit` uses paper-type-aware skips so documents, patents, dissertations, and similar front matter do not create spurious `title_mismatch` warnings.
+- `audit` reports `noncanonical_paper_type` when a stored type differs from the value used by search and library views. Metadata writes normalize aliases such as `jour` to `journal-article` and `monograph` to `book`. Missing types with both a journal and DOI default to `journal-article`; selected review venues infer `review` for missing or generic article types. Venue inference is a heuristic, and explicit specialized types such as `editorial` or `correction` are preserved. Existing records are not rewritten by an audit or search.
 - `setup` is the environment check and setup wizard entrypoint.
 - `insights` analyzes research behavior such as hot keywords and reading trends.
 - `metrics` shows LLM token and runtime usage.

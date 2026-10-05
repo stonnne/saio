@@ -7,22 +7,17 @@ import shutil
 import sys
 from pathlib import Path
 
+import scholaraio.interfaces.cli.paper as _dep_paper
+
 
 def _ui(msg: str = "") -> None:
-    try:
-        from scholaraio.interfaces.cli import compat as cli_mod
-    except ImportError:
-        from scholaraio.core.log import ui as log_ui
+    from scholaraio.core import log
 
-        log_ui(msg)
-        return
-    cli_mod.ui(msg)
+    log.ui(msg)
 
 
 def _resolve_paper(paper_id: str, cfg) -> Path:
-    from scholaraio.interfaces.cli import compat as cli_mod
-
-    return cli_mod._resolve_paper(paper_id, cfg)
+    return _dep_paper._resolve_paper(paper_id, cfg)
 
 
 def _batch_convert_pdfs(cfg, *, enrich: bool = False) -> None:
@@ -236,7 +231,7 @@ def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
     _ui(f"Generated paper.md: {paper_d.name}/")
 
     # Backfill abstract if missing.
-    from scholaraio.stores.papers import read_meta, write_meta
+    from scholaraio.stores.papers import read_meta, update_meta
 
     data = read_meta(paper_d)
     if not data.get("abstract"):
@@ -245,7 +240,7 @@ def cmd_attach_pdf(args: argparse.Namespace, cfg) -> None:
         abstract = extract_abstract_from_md(existing_md, cfg)
         if abstract:
             data["abstract"] = abstract
-            write_meta(paper_d, data)
+            update_meta(paper_d, abstract=abstract)
             _ui(f"Abstract filled ({len(abstract)} chars)")
 
     # Incremental re-embed + re-index.

@@ -71,6 +71,9 @@ full = [
     "modelscope>=1.10",
     "curl-cffi>=0.5",
 ]
+browser-test = [
+    "playwright>=1.49",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
@@ -152,7 +155,6 @@ check_untyped_defs = true
 module = [
     "scholaraio.services.topics",
     "scholaraio.services.vectors",
-    "scholaraio.cli",
 
     "scholaraio.stores.explore",
     "scholaraio.services.ingest.*",
@@ -160,12 +162,27 @@ module = [
 ]
 ignore_errors = true
 
+# Check executable bodies at persistent-data and HTTP boundaries.
+[[tool.mypy.overrides]]
+module = [
+    "scholaraio.core.config",
+    "scholaraio.core.fileio",
+    "scholaraio.stores.papers",
+    "scholaraio.stores.library_state",
+    "scholaraio.stores.pdf_edit_mirror",
+    "scholaraio.services.library_catalog",
+    "scholaraio.services.pdf_conflicts",
+    "scholaraio.interfaces.cli.gui",
+]
+check_untyped_defs = true
+
 # ---------- pytest ----------
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
 markers = [
     "slow: marks tests that need network or heavy computation",
+    "browser: opt-in real Chromium interaction tests",
 ]
 
 # ---------- coverage ----------

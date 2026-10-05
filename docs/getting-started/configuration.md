@@ -168,53 +168,8 @@ ScholarAIO knows how to reach the backup server. The restored
 instance to a different root, run `scholaraio setup check` and rebuild
 path-sensitive indexes.
 
-### Rendered Web Extraction
-
-Use the host agent's native web search and URL reading for ordinary discovery.
-Configure the optional extractor only when URL ingestion requires JavaScript-
-rendered or PDF content that native reading cannot provide:
-
-```yaml
-webextract:
-  transport: mcp
-  mcp_url: http://127.0.0.1:8766/mcp
-  api_key: "optional-token"
-  mcp_tool: fetch_url
-```
-
-The legacy HTTP endpoints are still supported:
-
-```yaml
-webextract:
-  transport: http
-  base_url: http://127.0.0.1:8766
-  api_key: "optional-token"
-```
-
-### Paper2Any MCP Sidecar
-
-Paper2Any is an optional external extension. ScholarAIO keeps the OpenDCAI/Paper2Any checkout outside tracked source, normally under `data/runtime/extensions/paper2any/Paper2Any`, and talks to it through a lightweight MCP sidecar:
-
-```yaml
-paper2any:
-  transport: mcp
-  mcp_url: http://127.0.0.1:8770/mcp
-  root: null
-  base_url: http://127.0.0.1:8000
-  api_key: "optional-sidecar-token"
-  backend_api_key: "optional-upstream-backend-token"
-```
-
-Agent workflows should start the sidecar with:
-
-```bash
-scholaraio paper2any setup
-scholaraio paper2any mcp-serve
-scholaraio paper2any backend-serve # optional, only when a FastAPI workflow is needed
-scholaraio paper2any status
-```
-
-If the user wants the agent to prepare Paper2Any's isolated upstream Python runtime as well, the agent can run `scholaraio paper2any setup --install-runtime`.
+ScholarAIO does not configure an external web discovery or extraction service.
+Use the active agent's native web search and URL-reading tools instead.
 
 ### Publish Site
 

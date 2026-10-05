@@ -42,7 +42,6 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd_attach_pdf = cli_mod.cmd_attach_pdf
     cmd_attach_asset = cli_mod.cmd_attach_asset
     cmd_fetch_pdf = cli_mod.cmd_fetch_pdf
-    cmd_ingest_link = cli_mod.cmd_ingest_link
     cmd_arxiv_search = cli_mod.cmd_arxiv_search
     cmd_arxiv_fetch = cli_mod.cmd_arxiv_fetch
     cmd_patent_search = cli_mod.cmd_patent_search
@@ -54,8 +53,6 @@ def _build_parser() -> argparse.ArgumentParser:
     cmd_insights = cli_mod.cmd_insights
     cmd_migrate = cli_mod.cmd_migrate
     cmd_translate = cli_mod.cmd_translate
-    cmd_webextract = cli_mod.cmd_webextract
-    cmd_paper2any = cli_mod.cmd_paper2any
     cmd_backup = cli_mod.cmd_backup
     cmd_metrics = cli_mod.cmd_metrics
     cmd_publish_site = cli_mod.cmd_publish_site
@@ -66,6 +63,23 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Academic harness for AI coding agents",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    from scholaraio.interfaces.cli.pdf_recovery import cmd_pdf_recovery
+
+    recovery = sub.add_parser("pdf-recovery", help="Inspect, export, or explicitly resolve PDF mirror conflicts")
+    recovery_sub = recovery.add_subparsers(dest="action", required=True)
+    for action in ("inspect", "export", "resolve"):
+        command = recovery_sub.add_parser(action)
+        command.add_argument("paper_id")
+        command.add_argument("--source", choices=("main", "proceedings"), default="main")
+        if action != "inspect":
+            command.add_argument("--token", required=True, help="Snapshot token from inspect")
+            command.add_argument("--version", required=True, help="Version ID from inspect")
+        if action == "export":
+            command.add_argument("--output", type=str, required=True)
+        if action == "resolve":
+            command.add_argument("--readers-closed", action="store_true")
+        command.set_defaults(func=cmd_pdf_recovery)
 
     # --- index ---
     p_index = sub.add_parser("index", help="Build the FTS5 search index")
@@ -700,96 +714,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Overwrite existing PDF or force pipeline processing"
     )
     p_arxiv_fetch.add_argument("--dry-run", action="store_true", help="Preview planned actions")
-
-    # --- webextract ---
-    p_wext = sub.add_parser("webextract", help="Extract web content with qt-web-extractor")
-    p_wext.set_defaults(func=cmd_webextract)
-    p_wext.add_argument("url", help="Web page URL to extract")
-    p_wext.add_argument("--pdf", action="store_true", help="Treat the target as a PDF file")
-    p_wext.add_argument("--full", action="store_true", help="Print the full extraction result without truncation")
-    p_wext.add_argument("--max-chars", type=int, default=4000, help="Maximum preview characters (default: 4000)")
-
-    # --- paper2any ---
-    p_paper2any = sub.add_parser("paper2any", help="Paper2Any MCP sidecar integration")
-    p_paper2any.set_defaults(func=cmd_paper2any)
-    p_paper2any_sub = p_paper2any.add_subparsers(dest="paper2any_action", required=True)
-
-    p_paper2any_setup = p_paper2any_sub.add_parser(
-        "setup",
-        help="Prepare the external Paper2Any runtime extension",
-        description="Prepare the external Paper2Any runtime extension",
-    )
-    p_paper2any_setup.add_argument("--paper2any-root", default="", help="External OpenDCAI/Paper2Any checkout")
-    p_paper2any_setup.add_argument(
-        "--repo-url",
-        default="https://github.com/OpenDCAI/Paper2Any.git",
-        help="Upstream Paper2Any git URL",
-    )
-    p_paper2any_setup.add_argument("--ref", default="main", help="Upstream git branch, tag, or ref")
-    p_paper2any_setup.add_argument("--update", action="store_true", help="Fetch and checkout the requested ref")
-    p_paper2any_setup.add_argument(
-        "--install-runtime",
-        action="store_true",
-        help="Install Paper2Any requirements into an isolated runtime venv",
-    )
-    p_paper2any_setup.add_argument("--python", default=None, help="Python executable used to create the runtime venv")
-    p_paper2any_setup.add_argument("--dry-run", action="store_true", help="Show planned setup actions")
-
-    p_paper2any_serve = p_paper2any_sub.add_parser(
-        "mcp-serve",
-        help="Start the lightweight Paper2Any MCP sidecar",
-        description="Start the lightweight Paper2Any MCP sidecar",
-    )
-    p_paper2any_serve.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
-    p_paper2any_serve.add_argument("--port", type=int, default=8770, help="Bind port (default: 8770)")
-    p_paper2any_serve.add_argument("--paper2any-root", default="", help="External OpenDCAI/Paper2Any checkout")
-    p_paper2any_serve.add_argument("--backend-url", default="", help="Running Paper2Any FastAPI backend URL")
-    p_paper2any_serve.add_argument("--backend-api-key", default="", help="Paper2Any backend X-API-Key")
-    p_paper2any_serve.add_argument("--bearer-token", default="", help="Optional MCP bearer token")
-    p_paper2any_serve.add_argument("--timeout", type=int, default=120, help="Backend/CLI timeout in seconds")
-
-    p_paper2any_backend = p_paper2any_sub.add_parser(
-        "backend-serve",
-        help="Start the real upstream Paper2Any FastAPI backend",
-        description="Start the real upstream Paper2Any FastAPI backend",
-    )
-    p_paper2any_backend.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
-    p_paper2any_backend.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
-    p_paper2any_backend.add_argument("--paper2any-root", default="", help="External OpenDCAI/Paper2Any checkout")
-    p_paper2any_backend.add_argument("--backend-api-key", default="", help="Paper2Any backend X-API-Key")
-    p_paper2any_backend.add_argument("--python", default="", help="Python executable used to run uvicorn")
-
-    p_paper2any_status = p_paper2any_sub.add_parser("status", help="Check the Paper2Any MCP sidecar")
-    del p_paper2any_status
-
-    p_paper2any_tools = p_paper2any_sub.add_parser("tools", help="List Paper2Any MCP tools")
-    del p_paper2any_tools
-
-    p_paper2any_call = p_paper2any_sub.add_parser(
-        "call",
-        help="Call a Paper2Any MCP tool",
-        description="Call a Paper2Any MCP tool",
-    )
-    p_paper2any_call.add_argument("tool", help="MCP tool name, for example paper2any_capabilities")
-    p_paper2any_call.add_argument(
-        "--arguments-json",
-        default="{}",
-        help='Tool arguments as a JSON object (default: "{}")',
-    )
-
-    # --- ingest-link ---
-    p_ingest_link = sub.add_parser(
-        "ingest-link", help="Extract rendered web pages or online PDFs and ingest them as documents"
-    )
-    p_ingest_link.set_defaults(func=cmd_ingest_link)
-    p_ingest_link.add_argument("urls", nargs="+", help="One or more web page or online PDF URLs")
-    p_ingest_link.add_argument("--dry-run", action="store_true", help="Preview planned actions")
-    p_ingest_link.add_argument("--force", action="store_true", help="Force reprocessing generated documents")
-    p_ingest_link.add_argument(
-        "--pdf", action="store_true", help="Hint webextract to use PDF mode when auto-detection is unreliable"
-    )
-    p_ingest_link.add_argument("--no-index", action="store_true", help="Ingest only; skip embed/index")
-    p_ingest_link.add_argument("--json", action="store_true", help="Print extraction summary as JSON")
 
     # --- publish-site ---
     p_publish = sub.add_parser(

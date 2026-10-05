@@ -1,8 +1,13 @@
 const POLL_MS = 2200;
 const PDF_SYNC_POLL_MS = 5000;
+const responseCache = new Map();
 
 const state = {
   tab: "main",
+  pageOffset: 0,
+  filterTimer: null,
+  recovery: null,
+  recoveryRequestSeq: 0,
   rows: { main: [], proceedings: [] },
   payload: { main: null, proceedings: null },
   detail: null,
@@ -29,6 +34,8 @@ const state = {
   pdfFullscreen: false,
   detailRequestSeq: 0,
   refreshRequestSeq: { main: 0, proceedings: 0 },
+  refreshInFlight: { main: 0, proceedings: 0 },
+  selectingText: false,
   filters: {
     search: "",
     title: "",
@@ -77,7 +84,6 @@ const els = {
   yearFromFilter: document.getElementById("year-from-filter"),
   yearToFilter: document.getElementById("year-to-filter"),
   journalFilter: document.getElementById("journal-filter"),
-  doiFilter: document.getElementById("doi-filter"),
   typeFilter: document.getElementById("type-filter"),
   volumeFilter: document.getElementById("volume-filter"),
   volumeFilterLabel: document.getElementById("volume-filter-label"),
@@ -104,18 +110,31 @@ function setConnection(kind, label) {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, { cache: "no-store", ...options });
+  const { conditional = false, ...requestOptions } = options;
+  const cached = conditional ? responseCache.get(url) : null;
+  const headers = { ...requestOptions.headers };
+  if (cached?.etag) headers["If-None-Match"] = cached.etag;
+  const response = await fetch(url, {
+    cache: "no-store", signal: globalThis.AbortSignal?.timeout?.(60000), ...requestOptions, headers,
+  });
+  if (response.status === 304 && cached) return cached.payload;
   if (!response.ok) {
     let message = `${response.status || ""} ${response.statusText || "Request failed"}`.trim();
+    let code = "";
     try {
       const payload = await response.json();
       if (payload?.error) message = payload.error;
+      code = payload?.code || "";
     } catch (_err) {
       // Keep the HTTP fallback when an error body is not JSON.
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.code = code;
+    throw error;
   }
-  return response.json();
+  const payload = await response.json();
+  if (conditional) responseCache.set(url, { etag: response.headers?.get?.("ETag"), payload });
+  return payload;
 }
 
 async function loadCapabilities() {
@@ -219,6 +238,7 @@ function compareRows(a, b) {
 }
 
 function filteredRows() {
+  if (activePayload()?.matched !== undefined) return activeRows();
   let rows = activeRows().filter(rowMatches);
   if (state.ranked) {
     rows = rows.filter((row) => state.ranked.byId.has(row.paper_id));
@@ -237,7 +257,6 @@ function syncFiltersFromControls() {
   state.filters.yearFrom = els.yearFromFilter.value.trim();
   state.filters.yearTo = els.yearToFilter.value.trim();
   state.filters.journal = els.journalFilter.value.trim();
-  state.filters.doi = els.doiFilter.value.trim();
   state.filters.type = els.typeFilter.value;
   state.filters.volume = els.volumeFilter.value;
 }
@@ -258,6 +277,7 @@ function activeFilterTotal() {
 
 function renderActiveFilterCount() {
   const total = activeFilterTotal();
+  els.activeFilterCount.hidden = !total;
   els.activeFilterCount.textContent = total ? `${total} active filter${total === 1 ? "" : "s"}` : "No active filters";
 }
 
@@ -296,6 +316,7 @@ function setSearchDiagnostics(kind, message, actions = []) {
   const commands = (actions || []).map((action) => action.command).filter(Boolean);
   els.searchDiagnostics.dataset.kind = kind;
   els.searchDiagnostics.textContent = [message, ...commands].filter(Boolean).join(" • ");
+  els.searchDiagnostics.hidden = !els.searchDiagnostics.textContent;
 }
 
 function updateSearchModeUi() {
@@ -312,18 +333,18 @@ function updateSearchModeUi() {
   els.searchButton.setAttribute?.("aria-busy", state.searchBusy ? "true" : "false");
   els.searchButton.textContent = state.searchBusy ? "Searching…" : "Search";
   els.searchInput.placeholder =
-    state.searchMode === "metadata" ? "Filter loaded metadata" : `Enter a ${state.searchMode} search query`;
+    state.searchMode === "metadata" ? "Search library metadata" : `Enter a ${state.searchMode} search query`;
   if (proceedings) {
-    setSearchDiagnostics("info", "Proceedings currently supports Metadata search and structured filters.");
+    setSearchDiagnostics("info", "");
   } else if (state.searchMode === "metadata") {
-    setSearchDiagnostics("info", "Metadata mode filters the loaded records instantly.");
+    setSearchDiagnostics("info", "");
   }
 }
 
 function renderFilters() {
   const rows = activeRows();
-  const types = [...new Set(rows.map((row) => row.paper_type).filter(Boolean))].sort();
-  const volumes = [...new Set(rows.map((row) => row.proceeding_title).filter(Boolean))].sort();
+  const types = activePayload()?.types || [...new Set(rows.map((row) => row.paper_type).filter(Boolean))].sort();
+  const volumes = activePayload()?.volumes || [...new Set(rows.map((row) => row.proceeding_title).filter(Boolean))].sort();
   state.filters.type = buildOptions(els.typeFilter, types, "All types");
   state.filters.volume = buildOptions(els.volumeFilter, volumes, "All volumes");
   const isProceedings = state.tab === "proceedings";
@@ -335,14 +356,22 @@ function renderFilters() {
 
 function renderMetrics() {
   const payload = activePayload();
+  const refreshError = document.getElementById("library-refresh-error");
+  refreshError.textContent = payload?.refresh_error || "";
+  refreshError.hidden = !payload?.refresh_error;
   const root = payload?.root || "";
-  els.sourceTitle.textContent = state.tab === "main" ? "Main Papers" : "Proceedings";
+  els.sourceTitle.textContent = state.tab === "main" ? "Library" : "Proceedings";
+  document.getElementById("records-kicker").textContent = state.tab === "main" ? "Main library" : "Proceedings";
+  document.getElementById("records-title").textContent = state.tab === "main" ? "All papers" : "All proceedings";
   els.sourceRoot.textContent = root || "--";
   els.sourceRoot.title = root;
   els.sourceCopyButton.disabled = !root;
   if (els.sourceCopyButton.textContent !== "Copied") els.sourceCopyButton.textContent = "Copy";
   els.metricTotal.textContent = String(payload?.total ?? "--");
-  els.updatedAt.textContent = formatDate(payload?.generated_at);
+  const audit = payload?.audit;
+  els.updatedAt.textContent = audit?.state === "running" ? "Checking metadata quality…" : formatDate(payload?.generated_at);
+  els.updatedAt.title = audit?.state === "failed" ? "Metadata quality check failed; it will retry automatically." :
+    audit?.completed_at ? `Metadata quality checked: ${formatDate(audit.completed_at)}` : "";
 }
 
 function rankedSearchUrl() {
@@ -385,7 +414,7 @@ async function runRankedSearch() {
   }
   if (state.searchMode === "metadata") {
     state.ranked = null;
-    setSearchDiagnostics("info", "Metadata mode filters the loaded records instantly.");
+    setSearchDiagnostics("info", "");
     renderTableAndReconcileSelection();
     return;
   }
@@ -444,6 +473,8 @@ async function runRankedSearch() {
 }
 
 function markRankedSearchDirty() {
+  state.searchRequestSeq += 1;
+  setSearchButtonBusy(false);
   if (state.searchMode === "metadata") {
     state.ranked = null;
     renderTableAndReconcileSelection();
@@ -478,7 +509,6 @@ function clearAllFilters() {
     els.yearFromFilter,
     els.yearToFilter,
     els.journalFilter,
-    els.doiFilter,
     els.typeFilter,
     els.volumeFilter,
   ]) {
@@ -510,6 +540,12 @@ function renderTable() {
   els.tableBody.textContent = "";
   els.emptyState.hidden = rows.length > 0;
   els.tableCount.textContent = state.ranked ? `${rows.length} ranked result${rows.length === 1 ? "" : "s"}` : `${rows.length} shown`;
+  const payload = activePayload();
+  if (payload?.matched !== undefined) {
+    els.tableCount.textContent = `${payload.matched ? payload.offset + 1 : 0}–${payload.offset + rows.length} of ${payload.matched.toLocaleString()}`;
+    document.getElementById("page-previous").disabled = payload.offset === 0;
+    document.getElementById("page-next").disabled = payload.offset + rows.length >= payload.matched;
+  }
   for (const row of rows) {
     const tr = document.createElement("tr");
     tr.className = state.selected[state.tab] === row.paper_id ? "is-selected" : "";
@@ -522,6 +558,12 @@ function renderTable() {
     title.className = "paper-title";
     title.textContent = text(row.title);
     titleWrap.appendChild(title);
+    if (row.journal || row.proceeding_title) {
+      const source = document.createElement("div");
+      source.className = "paper-source";
+      source.textContent = row.journal || row.proceeding_title;
+      titleWrap.appendChild(source);
+    }
     const ranking = rankingFor(row.paper_id);
     if (ranking) {
       const relevance = document.createElement("div");
@@ -533,9 +575,15 @@ function renderTable() {
     titleCell.appendChild(titleWrap);
     tr.appendChild(titleCell);
 
-    for (const value of [row.authors_text, row.year, row.paper_type]) {
+    for (const [index, value] of [row.authors_text, row.year, row.paper_type].entries()) {
       const td = document.createElement("td");
-      td.textContent = text(value);
+      const content = document.createElement("div");
+      content.textContent = text(value);
+      if (index === 0) {
+        content.className = "authors-preview";
+        content.title = text(value);
+      }
+      td.appendChild(content);
       tr.appendChild(td);
     }
 
@@ -581,6 +629,13 @@ function reconcileVisibleSelection() {
 }
 
 function renderTableAndReconcileSelection() {
+  if (activePayload()?.matched !== undefined) {
+    state.pageOffset = 0;
+    state.refreshRequestSeq[state.tab] += 1;
+    clearTimeout(state.filterTimer);
+    state.filterTimer = setTimeout(() => refreshActive({ keepSelection: true }), 180);
+    return;
+  }
   renderTable();
   reconcileVisibleSelection();
 }
@@ -588,31 +643,28 @@ function renderTableAndReconcileSelection() {
 function renderMetadata(detail) {
   els.metadataGrid.textContent = "";
   const pairs = [
-    ["Directory", detail.dir_name],
     ["Authors", detail.authors_text],
     ["Year", detail.year],
-    ["Type", detail.paper_type],
     ["Journal", detail.journal],
     ["DOI", detail.doi],
   ];
   if (state.tab === "proceedings") pairs.splice(2, 0, ["Volume", detail.proceeding_title]);
   for (const [label, value] of pairs) {
+    if (value == null || !String(value).trim()) continue;
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");
     dd.textContent = text(value);
     els.metadataGrid.append(dt, dd);
   }
+  document.getElementById("metadata-section").hidden = !els.metadataGrid.children.length;
 }
 
 function renderIssues(detail) {
   els.issueList.textContent = "";
   const issues = detail.issues || [];
+  document.getElementById("quality-section").hidden = !issues.length;
   if (!issues.length) {
-    const empty = document.createElement("div");
-    empty.className = "pill ok";
-    empty.textContent = "No audit issues";
-    els.issueList.appendChild(empty);
     return;
   }
   for (const issue of issues) {
@@ -632,11 +684,8 @@ function renderIssues(detail) {
 function renderToc(detail) {
   els.tocList.textContent = "";
   const toc = detail.toc || [];
+  document.getElementById("toc-section").hidden = !toc.length;
   if (!toc.length) {
-    const empty = document.createElement("div");
-    empty.className = "pill";
-    empty.textContent = "No TOC";
-    els.tocList.appendChild(empty);
     return;
   }
   for (const entry of toc) {
@@ -683,12 +732,90 @@ function renderDetailActions(detail) {
 
 function renderPdfSyncStatus(status) {
   const stateName = String(status?.state || "not_opened");
-  const actionable = stateName === "sync_pending" || stateName === "sync_failed";
+  const actionable = ["sync_pending", "sync_failed", "conflict"].includes(stateName);
+  document.getElementById("pdf-recovery-button").hidden = stateName !== "conflict";
   els.pdfSyncStatus.hidden = !actionable;
   els.pdfSyncStatus.dataset.state = stateName;
   els.pdfSyncStatus.textContent = actionable
     ? String(status?.message || (stateName === "sync_pending" ? "PDF synchronization is pending." : "PDF synchronization failed."))
     : "";
+}
+
+function closePdfRecovery() {
+  state.recoveryRequestSeq += 1;
+  state.recovery = null;
+  document.getElementById("pdf-recovery-panel").hidden = true;
+}
+
+async function inspectPdfRecovery() {
+  const source = state.tab;
+  const id = state.selected[source];
+  if (!id) return;
+  const requestSeq = ++state.recoveryRequestSeq;
+  const panel = document.getElementById("pdf-recovery-panel");
+  const message = document.getElementById("pdf-recovery-message");
+  try {
+    const snapshot = await fetchJson(`/api/${source}/pdf-recovery?id=${encodeURIComponent(id)}`);
+    if (state.recoveryRequestSeq !== requestSeq || state.tab !== source || state.selected[source] !== id) return;
+    state.recovery = { source, id, snapshot };
+    panel.hidden = false;
+    document.getElementById("pdf-readers-closed").checked = false;
+    message.textContent = "Download the versions you want to keep, or choose one to synchronize both active copies.";
+    const list = document.getElementById("pdf-recovery-versions");
+    list.textContent = "";
+    for (const version of snapshot.versions) {
+      const row = document.createElement("div");
+      row.className = "pdf-recovery-version";
+      const label = document.createElement("p");
+      const name = version.id === "canonical" ? "Library copy" : version.id === "mirror" ? "Windows viewer copy" : "Retained save";
+      label.textContent = `${name}: ${version.size} bytes · ${new Date(version.mtime_ns / 1e6).toLocaleString()} · ${version.hash.slice(0, 12)}${version.valid ? "" : " (unavailable or invalid)"}`;
+      row.appendChild(label);
+      if (version.exportable) {
+        const params = new URLSearchParams({ id, version: version.id, token: snapshot.token });
+        const url = `/api/${source}/pdf-recovery?${params}`;
+        const links = [["Download / keep this copy", "&download=1"]];
+        if (version.valid) links.unshift(["Preview", ""]);
+        for (const [label, suffix] of links) {
+          const link = document.createElement("a");
+          link.textContent = label;
+          link.href = url + suffix;
+          link.target = "_blank";
+          link.rel = "noopener";
+          row.appendChild(link);
+          row.appendChild(document.createTextNode(" "));
+        }
+      }
+      if (version.valid) {
+        const use = document.createElement("button");
+        use.className = "action-button";
+        use.textContent = "Use this version for both copies";
+        use.addEventListener("click", async () => {
+          if (!document.getElementById("pdf-readers-closed").checked) {
+            message.textContent = "Close all PDF readers and check the confirmation first.";
+            return;
+          }
+          if (state.recovery?.snapshot !== snapshot) return;
+          use.disabled = true;
+          try {
+            await fetchJson(`/api/${source}/resolve-pdf`, { method: "POST",
+              headers: { "Content-Type": "application/json", "X-ScholarAIO-CSRF": state.capabilities.csrfToken },
+              body: JSON.stringify({ id, token: snapshot.token, version: version.id, readers_closed: true }) });
+            if (state.recovery?.snapshot !== snapshot) return;
+            closePdfRecovery();
+            showToast("Selected PDF synchronized. Recovery copies retained.");
+            await refreshPdfSyncStatus();
+          } catch (err) {
+            if (state.recovery?.snapshot !== snapshot) return;
+            message.textContent = `${String(err)} Reopen Review PDF versions to inspect the latest copies.`;
+          } finally { use.disabled = false; }
+        });
+        row.appendChild(use);
+      }
+      list.appendChild(row);
+    }
+  } catch (err) {
+    if (state.recoveryRequestSeq === requestSeq) showToast(`Could not inspect PDF versions: ${String(err)}`, "error");
+  }
 }
 
 function stopPdfSyncPolling() {
@@ -756,7 +883,23 @@ function schedulePdfSyncPolling(detail) {
 }
 
 function renderDetail(detail) {
+  for (const [section, value] of [["abstract", detail?.abstract], ["conclusion", detail?.l3_conclusion]]) {
+    document.getElementById(`${section}-section`).hidden = !String(value ?? "").trim();
+  }
+  if (detail && state.detail) {
+    const { pdf_sync: previousSync, audit: previousAudit, ...previousContent } = state.detail;
+    const { pdf_sync: nextSync, audit: nextAudit, ...nextContent } = detail;
+    if (JSON.stringify(previousContent) === JSON.stringify(nextContent)) {
+      state.detail = detail;
+      if (JSON.stringify(previousSync) !== JSON.stringify(nextSync)) renderPdfSyncStatus(nextSync);
+      return;
+    }
+  }
   if (!detail) {
+    for (const section of ["metadata", "quality", "toc"]) {
+      document.getElementById(`${section}-section`).hidden = true;
+    }
+    closePdfRecovery();
     state.detail = null;
     els.detailTitle.textContent = "Select a record";
     els.metadataGrid.textContent = "";
@@ -901,6 +1044,7 @@ async function deliverSelectedPdf() {
   const source = state.tab === "main" ? "main" : "proceedings";
   setRecordActionBusy("nativePdf", true);
   try {
+    showToast("Preparing PDF for the default viewer…");
     await fetchJson(`/api/${source}/open-pdf`, {
       method: "POST",
       headers: {
@@ -912,7 +1056,12 @@ async function deliverSelectedPdf() {
     showToast("PDF opened in the default viewer.");
     await refreshPdfSyncStatus();
   } catch (err) {
-    if (downloadPdf(detail)) {
+    if (err.code === "pdf_sync_conflict") {
+      showToast(String(err), "error");
+      await refreshPdfSyncStatus();
+    } else if (err.name === "TimeoutError" || err.name === "AbortError") {
+      showToast("PDF preparation has not responded yet. Check the default viewer before trying again.", "warning");
+    } else if (downloadPdf(detail)) {
       showToast(`The default viewer could not be opened, so the PDF was downloaded instead: ${String(err)}`, "warning");
     } else {
       showToast(`Could not open the default viewer: ${String(err)}`, "error");
@@ -951,24 +1100,35 @@ function openPdf(row) {
   els.pdfViewer.hidden = false;
 }
 
-async function selectRow(paperId) {
+function deferBackgroundRefresh() {
+  if (state.recovery) return true;
+  return document.visibilityState === "hidden" || state.pdf || state.selectingText ||
+    Boolean(globalThis.getSelection?.()?.toString());
+}
+
+async function selectRow(paperId, { background = false } = {}) {
+  if (state.selected[state.tab] !== paperId || (state.recovery && state.recovery.source !== state.tab)) {
+    closePdfRecovery();
+  }
   const requestTab = state.tab;
   const requestSeq = ++state.detailRequestSeq;
+  const selectionChanged = state.selected[requestTab] !== paperId;
   state.selected[requestTab] = paperId;
-  if (state.tab === requestTab) renderTable();
+  if (selectionChanged) renderTable();
   try {
     const endpoint = requestTab === "main" ? "/api/main/detail" : "/api/proceedings/detail";
     const detail = await fetchJson(`${endpoint}?id=${encodeURIComponent(paperId)}`);
     if (state.tab !== requestTab || state.selected[requestTab] !== paperId || state.detailRequestSeq !== requestSeq) {
       return;
     }
-    state.detail = detail;
+    if (background && deferBackgroundRefresh()) return;
     renderDetail(detail);
     setConnection("live", "Live");
   } catch (err) {
     if (state.tab !== requestTab || state.selected[requestTab] !== paperId || state.detailRequestSeq !== requestSeq) {
       return;
     }
+    if (background && deferBackgroundRefresh()) return;
     setConnection("error", "Detail failed");
     renderDetail({ title: "Detail unavailable", abstract: String(err) });
   }
@@ -981,47 +1141,74 @@ function chooseDefaultSelection() {
   return rows[0]?.paper_id || "";
 }
 
-async function refreshActive({ keepSelection = true } = {}) {
+async function refreshActive({ keepSelection = true, background = false, force = false } = {}) {
+  if (validateYearRange()) return;
   const requestTab = state.tab;
+  if (responseCache.size > 24) responseCache.clear();
+  if (background && (deferBackgroundRefresh() || state.refreshInFlight[requestTab])) return;
   const requestSeq = ++state.refreshRequestSeq[requestTab];
+  state.refreshInFlight[requestTab] += 1;
   const endpoint = requestTab === "main" ? "/api/main/papers" : "/api/proceedings/papers";
   try {
-    const payload = await fetchJson(endpoint);
+    const params = new URLSearchParams({ limit: "100", offset: String(state.pageOffset),
+      sort: state.sortKey, direction: state.sortDir });
+    for (const [key, value] of [["title", state.filters.title], ["author", state.filters.author],
+      ["journal", state.filters.journal], ["doi", state.filters.doi], ["paper_type", state.filters.type],
+      ["volume", state.filters.volume], ["year_from", state.filters.yearFrom], ["year_to", state.filters.yearTo]]) {
+      if (value) params.set(key, value);
+    }
+    if (state.searchMode === "metadata" && state.filters.search) params.set("q", state.filters.search);
+    if (state.ranked) params.set("ids", JSON.stringify([...state.ranked.byId.keys()]));
+    if (state.pageOffset && activePayload()?.revision) params.set("revision", activePayload().revision);
+    if (force) params.set("refresh", "1");
+    const payload = await fetchJson(`${endpoint}?${params}`, { conditional: !force });
     if (state.refreshRequestSeq[requestTab] !== requestSeq) {
       return;
     }
+    if (background && deferBackgroundRefresh()) return;
+    const rowsChanged = JSON.stringify(state.rows[requestTab]) !== JSON.stringify(payload.papers || []);
+    const oldPage = state.payload[requestTab];
+    const facetsChanged = JSON.stringify([oldPage?.types, oldPage?.volumes]) !==
+      JSON.stringify([payload.types, payload.volumes]);
+    const pageChanged = oldPage?.matched !== payload.matched || oldPage?.offset !== payload.offset;
     state.payload[requestTab] = payload;
     state.rows[requestTab] = payload.papers || [];
     if (state.tab !== requestTab) {
       return;
     }
+    state.pageOffset = payload.offset || 0;
     if (state.pdf && !state.rows[requestTab].some((row) => row.pdf_url === state.pdf.url)) {
       showRecords();
     }
-    renderFilters();
+    if (rowsChanged || facetsChanged || !state.detail) renderFilters();
     renderMetrics();
-    renderTable();
+    if (rowsChanged || pageChanged || !state.detail) renderTable();
     setConnection("live", "Live");
     const nextSelection = keepSelection ? chooseDefaultSelection() : filteredRows()[0]?.paper_id || "";
-    if (nextSelection) await selectRow(nextSelection);
+    if (nextSelection) await selectRow(nextSelection, { background });
     else renderDetail(null);
   } catch (err) {
-    if (state.tab !== requestTab) {
+    if (state.tab !== requestTab || state.refreshRequestSeq[requestTab] !== requestSeq ||
+        (background && deferBackgroundRefresh())) {
       return;
     }
     setConnection("error", "Refresh failed");
     els.tableCount.textContent = String(err);
+  } finally {
+    state.refreshInFlight[requestTab] -= 1;
   }
 }
 
 function schedulePoll() {
   clearInterval(state.pollTimer);
-  state.pollTimer = setInterval(() => refreshActive({ keepSelection: true }), POLL_MS);
+  state.pollTimer = setInterval(() => refreshActive({ keepSelection: true, background: true }), POLL_MS);
 }
 
 function switchTab(tab) {
   if (state.tab === tab) return;
+  closePdfRecovery();
   state.tab = tab;
+  state.pageOffset = 0;
   state.searchRequestSeq += 1;
   state.searchMode = "metadata";
   state.ranked = null;
@@ -1054,13 +1241,17 @@ function bindEvents() {
     els.yearFromFilter,
     els.yearToFilter,
     els.journalFilter,
-    els.doiFilter,
   ]) {
     input.addEventListener("input", () => {
       syncFiltersFromControls();
       const yearError = validateYearRange();
-      if (yearError) setSearchDiagnostics("error", yearError);
-      else markRankedSearchDirty();
+      if (yearError) {
+        state.searchRequestSeq += 1;
+        state.refreshRequestSeq[state.tab] += 1;
+        clearTimeout(state.filterTimer);
+        setSearchButtonBusy(false);
+        setSearchDiagnostics("error", yearError);
+      } else markRankedSearchDirty();
     });
   }
   els.searchInput.addEventListener("keydown", (event) => {
@@ -1093,15 +1284,27 @@ function bindEvents() {
     markRankedSearchDirty();
   });
   els.sourceCopyButton.addEventListener("click", copySourceRoot);
+  document.getElementById("pdf-recovery-button").addEventListener("click", inspectPdfRecovery);
+  document.getElementById("pdf-recovery-close").addEventListener("click", closePdfRecovery);
   els.copyBibtexButton.addEventListener("click", copySelectedBibtex);
   els.previewPdfButton.addEventListener("click", previewSelectedPdf);
   els.nativePdfButton.addEventListener("click", deliverSelectedPdf);
-  els.refreshButton.addEventListener("click", () => refreshActive({ keepSelection: true }));
+  els.refreshButton.addEventListener("click", () => refreshActive({ keepSelection: true, force: true }));
+  for (const [id, delta] of [["page-previous", -100], ["page-next", 100]]) {
+    document.getElementById(id).addEventListener("click", () => {
+      state.pageOffset = Math.max(0, state.pageOffset + delta);
+      refreshActive({ keepSelection: false });
+    });
+  }
   els.pdfBackButton.addEventListener("click", showRecords);
   els.pdfFullscreenButton.addEventListener("click", () => setPdfFullscreen(!state.pdfFullscreen));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && state.pdfFullscreen) setPdfFullscreen(false);
   });
+  document.addEventListener("pointerdown", () => { state.selectingText = true; });
+  document.addEventListener("pointerup", () => { state.selectingText = false; });
+  document.addEventListener("pointercancel", () => { state.selectingText = false; });
+  globalThis.addEventListener?.("blur", () => { state.selectingText = false; });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") stopPdfSyncPolling();
     else schedulePdfSyncPolling(state.detail);
@@ -1115,7 +1318,7 @@ function bindEvents() {
         state.sortKey = key;
         state.sortDir = key === "year" ? "desc" : "asc";
       }
-      renderTable();
+      renderTableAndReconcileSelection();
     });
   });
 }

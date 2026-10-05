@@ -28,6 +28,10 @@ DeepValidator = Callable[[Path], tuple[bool, str] | None]
 _LOG = logging.getLogger(__name__)
 
 
+class _DestinationChanged(OSError):
+    """An external writer changed the destination during synchronization."""
+
+
 @dataclass(frozen=True)
 class PdfValidationResult:
     """Validated content and metadata captured from one stable PDF file."""
@@ -170,14 +174,20 @@ def validate_pdf_candidate(
     if not stat.S_ISREG(before.st_mode):
         return PdfValidationResult(False, True, "PDF candidate is not a regular file")
     if before.st_size <= 0:
-        return PdfValidationResult(False, True, "PDF candidate is empty")
+        return PdfValidationResult(
+            False,
+            True,
+            "PDF candidate is empty",
+            content_hash=hashlib.sha256(b"").hexdigest(),
+            size=0,
+            mtime_ns=before.st_mtime_ns,
+            inode=before.st_ino,
+        )
 
     digest = hashlib.sha256()
     try:
         with candidate.open("rb") as stream:
             header = stream.read(5)
-            if header != b"%PDF-":
-                return PdfValidationResult(False, True, "PDF candidate has an invalid header")
             digest.update(header)
             while chunk := stream.read(1024 * 1024):
                 digest.update(chunk)
@@ -191,8 +201,26 @@ def validate_pdf_candidate(
     after_signature = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
     if before_signature != after_signature:
         return PdfValidationResult(False, True, "PDF candidate changed while it was being read")
+    if header != b"%PDF-":
+        return PdfValidationResult(
+            False,
+            True,
+            "PDF candidate has an invalid header",
+            content_hash=digest.hexdigest(),
+            size=after.st_size,
+            mtime_ns=after.st_mtime_ns,
+            inode=after.st_ino,
+        )
     if b"%%EOF" not in tail:
-        return PdfValidationResult(False, True, "PDF candidate has no end-of-file marker")
+        return PdfValidationResult(
+            False,
+            True,
+            "PDF candidate has no end-of-file marker",
+            content_hash=digest.hexdigest(),
+            size=after.st_size,
+            mtime_ns=after.st_mtime_ns,
+            inode=after.st_ino,
+        )
 
     deep_checked = False
     if deep_validator is not None:
@@ -202,7 +230,14 @@ def validate_pdf_candidate(
             deep_ok, deep_message = deep_result
             if not deep_ok:
                 return PdfValidationResult(
-                    False, True, deep_message or "PDF deep structure check failed", deep_checked=True
+                    False,
+                    True,
+                    deep_message or "PDF deep structure check failed",
+                    deep_checked=True,
+                    content_hash=digest.hexdigest(),
+                    size=after.st_size,
+                    mtime_ns=after.st_mtime_ns,
+                    inode=after.st_ino,
                 )
     return PdfValidationResult(
         True,
@@ -213,6 +248,27 @@ def validate_pdf_candidate(
         inode=after.st_ino,
         deep_checked=deep_checked,
     )
+
+
+def recovery_identity(path: Path, root: Path) -> tuple[str, int, int, int]:
+    """Hash stable retained bytes, including a damaged PDF, without following links."""
+    if not _path_within(path, root) or path.is_symlink():
+        raise OSError("Recovery file is outside its managed root or is a symbolic link")
+    before = path.stat()
+    if not stat.S_ISREG(before.st_mode):
+        raise OSError("Recovery candidate is not a regular file")
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+        after = os.fstat(stream.fileno())
+
+    def signature(value: os.stat_result) -> tuple[int, int, int, int]:
+        return (value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+
+    if signature(before) != signature(after) or signature(before) != signature(path.stat()):
+        raise OSError("Recovery candidate changed while reading")
+    return digest.hexdigest(), after.st_size, after.st_mtime_ns, after.st_ino
 
 
 def _now_iso() -> str:
@@ -332,7 +388,14 @@ class PdfEditMirrorReconciler:
             deep_validator=self.deep_validator,
         )
 
-    def _atomic_copy(self, source: Path, destination: Path, *, destination_root: Path) -> int:
+    def _atomic_copy(
+        self,
+        source: Path,
+        destination: Path,
+        *,
+        destination_root: Path,
+        expected_destination: PdfValidationResult | None = None,
+    ) -> int:
         if not _path_within(destination, destination_root):
             raise OSError("PDF destination is outside its managed root")
         source_state = source.stat(follow_symlinks=False)
@@ -372,7 +435,10 @@ class PdfEditMirrorReconciler:
                 raise OSError(validation.message)
             if validation.content_hash != copied_hash.hexdigest():
                 raise OSError("PDF copy hash did not match the source stream")
-            os.replace(temporary, destination)
+            if expected_destination is None:
+                os.replace(temporary, destination)
+            else:
+                self._publish_pdf(temporary, destination, destination_root, expected_destination)
             try:
                 directory_fd = os.open(destination.parent, os.O_RDONLY)
             except OSError:
@@ -388,6 +454,85 @@ class PdfEditMirrorReconciler:
                 temporary.unlink()
             except FileNotFoundError:
                 pass
+
+    def _publish_pdf(self, temporary: Path, destination: Path, root: Path, expected: PdfValidationResult) -> None:
+        """Publish without destroying a concurrent save or an open writer's inode.
+
+        There is no portable filesystem compare-and-swap against an external PDF
+        reader. Move the old inode into retained recovery storage, validate that
+        generation, then link the prepared file only if the name is still absent.
+        Never remove the retained inode: a reader may still hold it open.
+        """
+        if self._inspect(destination, root) != expected:
+            raise _DestinationChanged()
+        retained = None
+        try:
+            if expected.exists:
+                recovery_dir = destination.parent / ".scholaraio-pdf-recovery" / destination.name
+                recovery_dir.mkdir(parents=True, exist_ok=True)
+                original_hash, original_size, original_mtime = expected.content_hash, expected.size, expected.mtime_ns
+                if not original_hash:
+                    # Invalid PDFs still need a baseline for detecting writes
+                    # through old handles after recovery from the other side.
+                    original_stat = destination.stat()
+                    digest = hashlib.sha256()
+                    with destination.open("rb") as stream:
+                        while chunk := stream.read(1024 * 1024):
+                            digest.update(chunk)
+                    original_hash = digest.hexdigest()
+                    original_size, original_mtime = original_stat.st_size, original_stat.st_mtime_ns
+                retained = recovery_dir / (f"{original_hash}_{original_size}_{original_mtime}_{uuid.uuid4()}.pdf")
+                try:
+                    destination.rename(retained)
+                except FileNotFoundError as exc:
+                    raise _DestinationChanged() from exc
+                if self._inspect(retained, root) != expected:
+                    raise _DestinationChanged()
+            try:
+                os.link(temporary, destination)
+            except FileExistsError as exc:
+                raise _DestinationChanged() from exc
+            if retained is not None and self._inspect(retained, root) != expected:
+                raise _DestinationChanged()
+        except OSError:
+            if retained is not None and retained.exists():
+                # Restore the displaced file only if a reader has not already
+                # created a new file at this name. Both versions stay recoverable.
+                try:
+                    os.link(retained, destination)
+                except OSError:
+                    pass
+            raise
+
+    def recovery_changed(self, record: PdfEditMirrorRecord) -> bool:
+        """Detect saves through handles still referencing a displaced inode."""
+        acknowledged = self.store.recovery_acknowledgements(record.sync_id)
+        for active in (record.canonical_path, record.mirror_path):
+            recovery_dir = active.parent / ".scholaraio-pdf-recovery" / active.name
+            for path in recovery_dir.glob("*.pdf"):
+                if str(path) in acknowledged:
+                    baseline = acknowledged[str(path)]
+                    try:
+                        current = path.stat()
+                        if (current.st_size, current.st_mtime_ns, current.st_ino) != baseline[1:]:
+                            if recovery_identity(path, active.parent)[0] != baseline[0]:
+                                return True
+                    except OSError:
+                        return True
+                    continue
+                fields = path.stem.split("_")
+                if len(fields) != 4:
+                    return True
+                content_hash, size, mtime, _identifier = fields
+                try:
+                    state = path.stat()
+                    if (state.st_size, state.st_mtime_ns) == (int(size), int(mtime)):
+                        continue
+                except (OSError, ValueError):
+                    return True
+                if self._inspect(path, active.parent).content_hash != content_hash:
+                    return True
+        return False
 
     def _set_pending(self, record: PdfEditMirrorRecord, message: str) -> PdfReconcileResult:
         failure_count = record.failure_count + 1
@@ -410,6 +555,10 @@ class PdfEditMirrorReconciler:
         direction: str,
         bytes_copied: int,
     ) -> PdfReconcileResult:
+        # All success paths, including backup restoration, must check old reader
+        # handles immediately before advancing the common base hash.
+        if self.recovery_changed(record):
+            raise _DestinationChanged()
         self.store.update(
             record.sync_id,
             base_hash=canonical.content_hash,
@@ -445,7 +594,9 @@ class PdfEditMirrorReconciler:
         if destination_state.valid:
             backup = self.paths.backup_path(record.sync_id)
             self._atomic_copy(destination, backup, destination_root=self.paths.state_root)
-        bytes_copied = self._atomic_copy(source, destination, destination_root=destination_root)
+        bytes_copied = self._atomic_copy(
+            source, destination, destination_root=destination_root, expected_destination=destination_state
+        )
         canonical = self._inspect(record.canonical_path, library_root)
         mirror = self._inspect(record.mirror_path, self.paths.mirror_root)
         if not canonical.valid or not mirror.valid or canonical.content_hash != mirror.content_hash:
@@ -464,10 +615,22 @@ class PdfEditMirrorReconciler:
         *,
         library_root: Path,
         backup: PdfValidationResult,
+        canonical: PdfValidationResult,
+        mirror: PdfValidationResult,
     ) -> PdfReconcileResult:
         backup_path = self.paths.backup_path(record.sync_id)
-        copied = self._atomic_copy(backup_path, record.canonical_path, destination_root=library_root)
-        copied += self._atomic_copy(backup_path, record.mirror_path, destination_root=self.paths.mirror_root)
+        copied = self._atomic_copy(
+            backup_path,
+            record.canonical_path,
+            destination_root=library_root,
+            expected_destination=canonical,
+        )
+        copied += self._atomic_copy(
+            backup_path,
+            record.mirror_path,
+            destination_root=self.paths.mirror_root,
+            expected_destination=mirror,
+        )
         canonical = self._inspect(record.canonical_path, library_root)
         mirror = self._inspect(record.mirror_path, self.paths.mirror_root)
         if (
@@ -510,6 +673,13 @@ class PdfEditMirrorReconciler:
         try:
             with self._entry_lock(sync_id, timeout_seconds=lock_timeout_seconds):
                 result = self._reconcile_locked(sync_id, record_exists=record_exists)
+        except _DestinationChanged:
+            message = (
+                "A PDF changed during synchronization. Preserve both PDFs and the adjacent "
+                ".scholaraio-pdf-recovery files before reconciling the copies."
+            )
+            self.store.update(sync_id, state="conflict", retryable=False, message=message, next_retry_at=0.0)
+            result = PdfReconcileResult("conflict", retryable=False, message=message)
         except (OSError, RuntimeError) as exc:
             record = self.store.get(sync_id)
             if record is None:
@@ -536,6 +706,8 @@ class PdfEditMirrorReconciler:
             library_root = record.canonical_path.parent
         if not record_exists:
             return self._set_pending(record, "Library record is no longer available")
+        if self.recovery_changed(record):
+            raise _DestinationChanged()
 
         canonical = self._inspect(record.canonical_path, library_root)
         mirror = self._inspect(record.mirror_path, self.paths.mirror_root)
@@ -554,7 +726,9 @@ class PdfEditMirrorReconciler:
         if not canonical.valid and not mirror.valid:
             backup = self._inspect(self.paths.backup_path(record.sync_id), self.paths.state_root)
             if backup.valid:
-                return self._restore_backup(record, library_root=library_root, backup=backup)
+                return self._restore_backup(
+                    record, library_root=library_root, backup=backup, canonical=canonical, mirror=mirror
+                )
             return self._set_pending(record, canonical.message if canonical.exists else mirror.message)
         if canonical.valid and not mirror.exists:
             return self._copy_winner(
@@ -593,10 +767,26 @@ class PdfEditMirrorReconciler:
             winner = "canonical"
         elif mirror_changed and not canonical_changed:
             winner = "mirror"
-        elif canonical.mtime_ns > mirror.mtime_ns:
-            winner = "canonical"
         else:
-            winner = "mirror"
+            message = (
+                "Both PDFs changed. Synchronization is paused; preserve and reconcile both copies before reopening."
+            )
+            self.store.update(
+                record.sync_id,
+                state="conflict",
+                retryable=False,
+                message=message,
+                canonical_hash=canonical.content_hash,
+                canonical_size=canonical.size,
+                canonical_mtime_ns=canonical.mtime_ns,
+                canonical_inode=canonical.inode,
+                mirror_hash=mirror.content_hash,
+                mirror_size=mirror.size,
+                mirror_mtime_ns=mirror.mtime_ns,
+                mirror_inode=mirror.inode,
+                next_retry_at=0.0,
+            )
+            return PdfReconcileResult("conflict", retryable=False, message=message)
 
         if winner == "canonical":
             return self._copy_winner(
@@ -704,7 +894,9 @@ class PdfEditMirrorService:
         return self._signature(record.canonical_path), self._signature(record.mirror_path)
 
     def _changed(self, record: PdfEditMirrorRecord) -> bool:
-        return self._current_signatures(record) != self._stored_signatures(record)
+        return self._current_signatures(record) != self._stored_signatures(record) or self.reconciler.recovery_changed(
+            record
+        )
 
     def _wait_until_settled(self, record: PdfEditMirrorRecord, budget_seconds: float) -> bool:
         if not record.base_hash or not self._changed(record):
@@ -747,6 +939,8 @@ class PdfEditMirrorService:
                 launchable=True,
                 status=self.store.public_status(record),
             )
+        if record.state == "conflict" and not self._changed(record):
+            return PdfOpenPreparation(record.mirror_path, False, self.store.public_status(record))
         if not self._wait_until_settled(record, budget_seconds):
             record = self.store.update(
                 record.sync_id,
@@ -762,7 +956,7 @@ class PdfEditMirrorService:
                 lock_timeout_seconds=remaining,
             )
             record = self.store.get(record.sync_id) or record
-        launchable = record.state == "in_sync" or self._known_good_launchable(record)
+        launchable = record.state == "in_sync" or (record.state != "conflict" and self._known_good_launchable(record))
         return PdfOpenPreparation(
             mirror_path=record.mirror_path,
             launchable=launchable,
@@ -817,10 +1011,12 @@ class PdfEditMirrorService:
         now = self.wall_clock()
         for current in self.store.list_active():
             signatures = self._current_signatures(current)
-            signature_changed = signatures != self._stored_signatures(current)
+            signature_changed = signatures != self._stored_signatures(current) or self.reconciler.recovery_changed(
+                current
+            )
             retry_due = current.next_retry_at <= now
             audit_due = self._next_resolution_audit.get(current.sync_id, 0.0) <= now
-            needs_reconcile = signature_changed or current.state != "in_sync"
+            needs_reconcile = signature_changed or current.state not in {"in_sync", "conflict"}
             if not (signature_changed or audit_due or (needs_reconcile and retry_due)):
                 continue
             resolution = self._normalize_resolution(self.resolver(current))
@@ -841,7 +1037,7 @@ class PdfEditMirrorService:
             if current.next_retry_at > now:
                 continue
             signatures = self._current_signatures(current)
-            changed = signatures != self._stored_signatures(current) or current.state != "in_sync"
+            changed = self._changed(current) or current.state not in {"in_sync", "conflict"}
             if not changed:
                 self._observations.pop(current.sync_id, None)
                 continue
@@ -852,7 +1048,7 @@ class PdfEditMirrorService:
                 continue
             result = self.reconciler.reconcile(current.sync_id, record_exists=True)
             self._observations.pop(current.sync_id, None)
-            if result.state != "in_sync":
+            if result.retryable:
                 self._record_retry(current)
 
     def _run(self) -> None:

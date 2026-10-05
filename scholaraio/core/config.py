@@ -332,29 +332,6 @@ class PatentConfig:
 
 
 @dataclass
-class WebServiceConfig:
-    """External web capability endpoint config."""
-
-    base_url: str = ""
-    api_key: str = ""
-    transport: str = ""
-    mcp_url: str = ""
-    mcp_tool: str = ""
-
-
-@dataclass
-class Paper2AnyConfig:
-    """External Paper2Any MCP sidecar/backend configuration."""
-
-    root: str = ""
-    base_url: str = ""
-    api_key: str = ""
-    backend_api_key: str = ""
-    transport: str = ""
-    mcp_url: str = ""
-
-
-@dataclass
 class BackupTargetConfig:
     """Rsync backup target configuration.
 
@@ -448,9 +425,6 @@ class Config:
         translate: 自动翻译配置。
         zotero: Zotero 集成配置。
         patent: 专利搜索配置。
-        websearch: 外部网页搜索服务配置。
-        webextract: 外部网页提取服务配置。
-        paper2any: Paper2Any MCP sidecar / backend 配置。
         backup: 备份配置。
         openalex: OpenAlex API 配置。
         publish: 发布站点配置。
@@ -466,9 +440,6 @@ class Config:
     translate: TranslateConfig = field(default_factory=TranslateConfig)
     zotero: ZoteroConfig = field(default_factory=ZoteroConfig)
     patent: PatentConfig = field(default_factory=PatentConfig)
-    websearch: WebServiceConfig = field(default_factory=WebServiceConfig)
-    webextract: WebServiceConfig = field(default_factory=WebServiceConfig)
-    paper2any: Paper2AnyConfig = field(default_factory=Paper2AnyConfig)
     backup: BackupConfig = field(default_factory=BackupConfig)
     openalex: OpenAlexConfig = field(default_factory=OpenAlexConfig)
     publish: PublishConfig = field(default_factory=PublishConfig)
@@ -643,13 +614,6 @@ class Config:
     def runtime_root(self) -> Path:
         """未来临时运行根目录的绝对路径。"""
         return self._resolve_path(self.paths.runtime_root)
-
-    @property
-    def paper2any_root(self) -> Path:
-        """Default external Paper2Any checkout location."""
-        if self.paper2any.root:
-            return self._resolve_path(self.paper2any.root)
-        return (self.runtime_root / "extensions" / "paper2any" / "Paper2Any").resolve()
 
     @property
     def control_root(self) -> Path:
@@ -1173,34 +1137,6 @@ def _build_config(data: dict, root: Path) -> Config:
         uspto_odp_api_key=patent_data.get("uspto_odp_api_key") or "",
     )
 
-    websearch_data = data.get("websearch", {}) or {}
-    websearch = WebServiceConfig(
-        base_url=str(websearch_data.get("base_url") or "").strip(),
-        api_key=str(websearch_data.get("api_key") or "").strip(),
-        transport=str(websearch_data.get("transport") or "").strip(),
-        mcp_url=str(websearch_data.get("mcp_url") or "").strip(),
-        mcp_tool=str(websearch_data.get("mcp_tool") or "").strip(),
-    )
-
-    webextract_data = data.get("webextract", {}) or {}
-    webextract = WebServiceConfig(
-        base_url=str(webextract_data.get("base_url") or "").strip(),
-        api_key=str(webextract_data.get("api_key") or "").strip(),
-        transport=str(webextract_data.get("transport") or "").strip(),
-        mcp_url=str(webextract_data.get("mcp_url") or "").strip(),
-        mcp_tool=str(webextract_data.get("mcp_tool") or "").strip(),
-    )
-
-    paper2any_data = data.get("paper2any", {}) or {}
-    paper2any = Paper2AnyConfig(
-        root=str(paper2any_data.get("root") or "").strip(),
-        base_url=str(paper2any_data.get("base_url") or "").strip(),
-        api_key=str(paper2any_data.get("api_key") or "").strip(),
-        backend_api_key=str(paper2any_data.get("backend_api_key") or "").strip(),
-        transport=str(paper2any_data.get("transport") or "").strip(),
-        mcp_url=str(paper2any_data.get("mcp_url") or "").strip(),
-    )
-
     backup_data = data.get("backup", {}) or {}
     raw_targets = backup_data.get("targets", {}) or {}
     targets: dict[str, BackupTargetConfig] = {}
@@ -1280,9 +1216,6 @@ def _build_config(data: dict, root: Path) -> Config:
         translate=translate,
         zotero=zotero,
         patent=patent,
-        websearch=websearch,
-        webextract=webextract,
-        paper2any=paper2any,
         backup=backup,
         openalex=openalex,
         publish=publish,
